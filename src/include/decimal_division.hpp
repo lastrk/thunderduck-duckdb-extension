@@ -29,18 +29,19 @@ inline __int128 SparkDecimalDivide(__int128 a, __int128 b, unsigned __int128 pow
 		remainder = abs_a % abs_b;
 	} else {
 		// Check if abs_a * pow10_val would overflow unsigned __int128
-		bool overflow = (abs_a != 0) &&
-		                (pow10_val > (static_cast<unsigned __int128>(0) - 1) / abs_a);
+		// __builtin_mul_overflow compiles to a single mul instruction + flag check,
+		// avoiding the expensive division (UINT128_MAX / abs_a) of the naive approach.
+		unsigned __int128 scaled;
+		bool overflow = __builtin_mul_overflow(abs_a, pow10_val, &scaled);
 
 		if (!overflow) {
 			// Fast path: fits in 128 bits
-			unsigned __int128 scaled = abs_a * pow10_val;
 			quotient = scaled / abs_b;
 			remainder = scaled % abs_b;
 		} else {
 			// Slow path: use 256-bit intermediate
-			uint256_t scaled = Mul128(abs_a, pow10_val);
-			quotient = Div256By128(scaled, abs_b, &remainder);
+			uint256_t scaled_wide = Mul128(abs_a, pow10_val);
+			quotient = Div256By128(scaled_wide, abs_b, &remainder);
 		}
 	}
 
