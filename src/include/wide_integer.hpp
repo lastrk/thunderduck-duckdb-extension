@@ -107,41 +107,62 @@ inline unsigned __int128 Div256By128(uint256_t num, unsigned __int128 den,
 // Power-of-10 lookup for unsigned __int128 (up to 10^38)
 // ---------------------------------------------------------------------------
 
+// Helper to construct unsigned __int128 from high and low 64-bit halves.
+inline constexpr unsigned __int128 MakeUint128(uint64_t hi, uint64_t lo) {
+	return (static_cast<unsigned __int128>(hi) << 64) | lo;
+}
+
+// O(1) lookup table covering 10^0 through 10^38.
+// D_ASSERT guards against out-of-range exponents.
 inline unsigned __int128 Pow10_128(uint32_t exp) {
-	// For small exponents, fast lookup from a table
-	static const uint64_t small_table[] = {
-	    1ULL,
-	    10ULL,
-	    100ULL,
-	    1000ULL,
-	    10000ULL,
-	    100000ULL,
-	    1000000ULL,
-	    10000000ULL,
-	    100000000ULL,
-	    1000000000ULL,
-	    10000000000ULL,
-	    100000000000ULL,
-	    1000000000000ULL,
-	    10000000000000ULL,
-	    100000000000000ULL,
-	    1000000000000000ULL,
-	    10000000000000000ULL,
-	    100000000000000000ULL,
-	    1000000000000000000ULL,
-	    10000000000000000000ULL, // 10^19
+	// clang-format off
+	static constexpr unsigned __int128 table[] = {
+	    // 10^0 - 10^19: fit in uint64_t
+	    MakeUint128(0ULL,                    1ULL),                     // 10^0
+	    MakeUint128(0ULL,                    10ULL),                    // 10^1
+	    MakeUint128(0ULL,                    100ULL),                   // 10^2
+	    MakeUint128(0ULL,                    1000ULL),                  // 10^3
+	    MakeUint128(0ULL,                    10000ULL),                 // 10^4
+	    MakeUint128(0ULL,                    100000ULL),                // 10^5
+	    MakeUint128(0ULL,                    1000000ULL),               // 10^6
+	    MakeUint128(0ULL,                    10000000ULL),              // 10^7
+	    MakeUint128(0ULL,                    100000000ULL),             // 10^8
+	    MakeUint128(0ULL,                    1000000000ULL),            // 10^9
+	    MakeUint128(0ULL,                    10000000000ULL),           // 10^10
+	    MakeUint128(0ULL,                    100000000000ULL),          // 10^11
+	    MakeUint128(0ULL,                    1000000000000ULL),         // 10^12
+	    MakeUint128(0ULL,                    10000000000000ULL),        // 10^13
+	    MakeUint128(0ULL,                    100000000000000ULL),       // 10^14
+	    MakeUint128(0ULL,                    1000000000000000ULL),      // 10^15
+	    MakeUint128(0ULL,                    10000000000000000ULL),     // 10^16
+	    MakeUint128(0ULL,                    100000000000000000ULL),    // 10^17
+	    MakeUint128(0ULL,                    1000000000000000000ULL),   // 10^18
+	    MakeUint128(0ULL,                    10000000000000000000ULL),  // 10^19
+	    // 10^20 - 10^38: require both halves
+	    MakeUint128(5ULL,                    7766279631452241920ULL),   // 10^20
+	    MakeUint128(54ULL,                   3875820019684212736ULL),   // 10^21
+	    MakeUint128(542ULL,                  1864712049423024128ULL),   // 10^22
+	    MakeUint128(5421ULL,                 200376420520689664ULL),    // 10^23
+	    MakeUint128(54210ULL,                2003764205206896640ULL),   // 10^24
+	    MakeUint128(542101ULL,               1590897978359414784ULL),   // 10^25
+	    MakeUint128(5421010ULL,              15908979783594147840ULL),  // 10^26
+	    MakeUint128(54210108ULL,             11515845246265065472ULL),  // 10^27
+	    MakeUint128(542101086ULL,            4477988020393345024ULL),   // 10^28
+	    MakeUint128(5421010862ULL,           7886392056514347008ULL),   // 10^29
+	    MakeUint128(54210108624ULL,          5076944270305263616ULL),   // 10^30
+	    MakeUint128(542101086242ULL,         13875954555633532928ULL),  // 10^31
+	    MakeUint128(5421010862427ULL,        9632337040368467968ULL),   // 10^32
+	    MakeUint128(54210108624275ULL,       4089650035136921600ULL),   // 10^33
+	    MakeUint128(542101086242752ULL,      4003012203950112768ULL),   // 10^34
+	    MakeUint128(5421010862427522ULL,     3136633892082024448ULL),   // 10^35
+	    MakeUint128(54210108624275221ULL,    12919594847110692864ULL),  // 10^36
+	    MakeUint128(542101086242752217ULL,   68739955140067328ULL),     // 10^37
+	    MakeUint128(5421010862427522170ULL,  687399551400673280ULL),    // 10^38
 	};
+	// clang-format on
 
-	if (exp <= 19) {
-		return static_cast<unsigned __int128>(small_table[exp]);
-	}
-
-	// For 10^20 through 10^38, compute from 10^19
-	unsigned __int128 result = static_cast<unsigned __int128>(small_table[19]);
-	for (uint32_t i = 19; i < exp; i++) {
-		result *= 10;
-	}
-	return result;
+	D_ASSERT(exp <= 38);
+	return table[exp];
 }
 
 } // namespace duckdb
