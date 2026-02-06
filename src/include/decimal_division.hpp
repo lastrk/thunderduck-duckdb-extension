@@ -7,11 +7,14 @@ namespace duckdb {
 // Perform decimal division with ROUND_HALF_UP rounding (Spark semantics).
 //
 // Given two scaled integers a and b (representing DECIMAL values),
-// compute: result = (a * 10^scale_adj) / b, rounded HALF_UP.
+// compute: result = (a * pow10_val) / b, rounded HALF_UP.
+//
+// pow10_val must be precomputed as Pow10_128(scale_adj) by the caller.
+// When scale_adj == 0, pass pow10_val = 0 to skip scaling entirely.
 //
 // Returns the result as a signed __int128.
 // Caller must handle division by zero before calling this function.
-inline __int128 SparkDecimalDivide(__int128 a, __int128 b, uint32_t scale_adj) {
+inline __int128 SparkDecimalDivide(__int128 a, __int128 b, unsigned __int128 pow10_val) {
 	// Handle signs separately, work with absolute values
 	bool negative = (a < 0) != (b < 0);
 	unsigned __int128 abs_a = Abs128(a);
@@ -20,13 +23,11 @@ inline __int128 SparkDecimalDivide(__int128 a, __int128 b, uint32_t scale_adj) {
 	unsigned __int128 quotient;
 	unsigned __int128 remainder;
 
-	if (scale_adj == 0) {
-		// No scaling needed
+	if (pow10_val == 0) {
+		// No scaling needed (scale_adj was 0)
 		quotient = abs_a / abs_b;
 		remainder = abs_a % abs_b;
 	} else {
-		unsigned __int128 pow10_val = Pow10_128(scale_adj);
-
 		// Check if abs_a * pow10_val would overflow unsigned __int128
 		bool overflow = (abs_a != 0) &&
 		                (pow10_val > (static_cast<unsigned __int128>(0) - 1) / abs_a);

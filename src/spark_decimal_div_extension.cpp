@@ -39,6 +39,9 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 	auto &bind_data = func_expr.bind_info->Cast<SparkDivBindData>();
 	uint32_t scale_adj = bind_data.scale_adj;
 
+	// Precompute power-of-10 once for the entire batch (scale_adj is constant)
+	unsigned __int128 pow10_val = (scale_adj > 0) ? Pow10_128(scale_adj) : 0;
+
 	idx_t count = args.size();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
 	auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
@@ -70,7 +73,7 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 		}
 
 		__int128 a_val = HugeintToInt128(a_data[a_idx]);
-		__int128 div_result = SparkDecimalDivide(a_val, b_val, scale_adj);
+		__int128 div_result = SparkDecimalDivide(a_val, b_val, pow10_val);
 
 		// Write result, converting from __int128 to the target physical type
 		WriteResult(result_data, i, div_result);
