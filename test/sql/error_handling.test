@@ -1,0 +1,65 @@
+# name: test/sql/error_handling.test
+# description: Error handling for invalid inputs
+# group: [spark_decimal_div]
+
+require spark_decimal_div
+
+# INTEGER arguments should produce an error
+statement error
+SELECT spark_decimal_div(1, 2);
+----
+spark_decimal_div requires DECIMAL arguments
+
+# VARCHAR arguments should produce an error
+statement error
+SELECT spark_decimal_div('10.5', '3.0');
+----
+spark_decimal_div requires DECIMAL arguments
+
+# DOUBLE arguments should produce an error
+statement error
+SELECT spark_decimal_div(10.5::DOUBLE, 3.0::DOUBLE);
+----
+spark_decimal_div requires DECIMAL arguments
+
+# FLOAT arguments should produce an error
+statement error
+SELECT spark_decimal_div(10.5::FLOAT, 3.0::FLOAT);
+----
+spark_decimal_div requires DECIMAL arguments
+
+# BIGINT arguments should produce an error
+statement error
+SELECT spark_decimal_div(100::BIGINT, 3::BIGINT);
+----
+spark_decimal_div requires DECIMAL arguments
+
+# Mixed: first arg DECIMAL, second INTEGER
+statement error
+SELECT spark_decimal_div(10.00::DECIMAL(4,2), 3);
+----
+spark_decimal_div requires DECIMAL arguments
+
+# Mixed: first arg INTEGER, second DECIMAL
+statement error
+SELECT spark_decimal_div(10, 3.00::DECIMAL(4,2));
+----
+spark_decimal_div requires DECIMAL arguments
+
+# Mixed: DECIMAL and DOUBLE
+statement error
+SELECT spark_decimal_div(10.00::DECIMAL(4,2), 3.0::DOUBLE);
+----
+spark_decimal_div requires DECIMAL arguments
+
+# Mixed: DECIMAL and VARCHAR
+statement error
+SELECT spark_decimal_div(10.00::DECIMAL(4,2), '3.0');
+----
+spark_decimal_div requires DECIMAL arguments
+
+# BOOLEAN arguments should produce an error
+statement error
+SELECT spark_decimal_div(true, false);
+----
+spark_decimal_div requires DECIMAL arguments
