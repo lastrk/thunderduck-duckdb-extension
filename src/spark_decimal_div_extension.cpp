@@ -7,7 +7,6 @@
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/scalar_function.hpp"
-#include "duckdb/main/extension_util.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -55,6 +54,12 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 	for (idx_t i = 0; i < count; i++) {
 		auto a_idx = a_fmt.sel->get_index(i);
 		auto b_idx = b_fmt.sel->get_index(i);
+
+		// NULL propagation
+		if (!a_fmt.validity.RowIsValid(a_idx) || !b_fmt.validity.RowIsValid(b_idx)) {
+			result_validity.SetInvalid(i);
+			continue;
+		}
 
 		__int128 b_val = HugeintToInt128(b_data[b_idx]);
 
@@ -129,20 +134,24 @@ static unique_ptr<FunctionData> BindSparkDecimalDiv(ClientContext &context,
 }
 
 // ---------------------------------------------------------------------------
-// Extension loading
+// Internal loading logic
 // ---------------------------------------------------------------------------
 
-void SparkDecimalDivExtension::Load(DuckDB &db) {
-	ScalarFunction func(
-	    "spark_decimal_div",                           // function name
-	    {LogicalType::DECIMAL, LogicalType::DECIMAL},  // argument types (parametric)
-	    LogicalType::DECIMAL,                          // return type (parametric)
-	    nullptr                                        // function ptr set by bind
-	);
-	func.bind = BindSparkDecimalDiv;
-	func.null_handling = FunctionNullHandling::DEFAULT_NULL_HANDLING;
+static void LoadInternal(ExtensionLoader &loader) {
+	vector<LogicalType> args = {LogicalType::ANY, LogicalType::ANY};
+	ScalarFunction func("spark_decimal_div", std::move(args), LogicalType::ANY, SparkDivExec<hugeint_t>,
+	                    BindSparkDecimalDiv);
+	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
-	ExtensionUtil::RegisterFunction(*db.instance, func);
+	loader.RegisterFunction(func);
+}
+
+// ---------------------------------------------------------------------------
+// Extension class methods
+// ---------------------------------------------------------------------------
+
+void SparkDecimalDivExtension::Load(ExtensionLoader &loader) {
+	LoadInternal(loader);
 }
 
 std::string SparkDecimalDivExtension::Name() {
@@ -153,9 +162,8 @@ std::string SparkDecimalDivExtension::Name() {
 
 extern "C" {
 
-DUCKDB_EXTENSION_API void spark_decimal_div_init(duckdb::DatabaseInstance &db) {
-	duckdb::DuckDB db_wrapper(db);
-	db_wrapper.LoadExtension<duckdb::SparkDecimalDivExtension>();
+DUCKDB_CPP_EXTENSION_ENTRY(spark_decimal_div, loader) {
+	duckdb::LoadInternal(loader);
 }
 
 DUCKDB_EXTENSION_API const char *spark_decimal_div_version() {
