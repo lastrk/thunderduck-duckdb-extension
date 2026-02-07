@@ -147,6 +147,17 @@ static void LoadInternal(ExtensionLoader &loader) {
 	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 
 	loader.RegisterFunction(func);
+
+	// Also override the `/` operator for DECIMAL types so that raw SQL
+	// (spark.sql("SELECT a / b ...")) automatically uses Spark semantics.
+	// We register a `/` overload with DECIMAL arguments. DuckDB merges
+	// overloads with AddFunctionOverload, so DECIMAL/DECIMAL division
+	// resolves to our Spark-compatible function while int/float/etc.
+	// continue using the built-in behavior.
+	ScalarFunction div_func("/", {LogicalType::DECIMAL(38, 0), LogicalType::DECIMAL(38, 0)},
+	                        LogicalType::ANY, SparkDivExec<hugeint_t>, BindSparkDecimalDiv);
+	div_func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	loader.AddFunctionOverload(div_func);
 }
 
 // ---------------------------------------------------------------------------
