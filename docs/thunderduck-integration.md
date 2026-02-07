@@ -1,0 +1,178 @@
+# Integrating thdck_spark_funcs with Thunderduck
+
+This document describes how to bundle the `thdck_spark_funcs` DuckDB extension
+as a JAR resource in [Thunderduck](https://github.com/lastrk/thunderduck) and
+load it at runtime when DuckDB is instantiated via JDBC.
+
+## Prerequisites
+
+- The extension is built as a `.duckdb_extension` loadable binary
+- The DuckDB version used to compile the extension **must match exactly** the
+  `duckdb_jdbc` version in Thunderduck's POM
+
+## Version Alignment
+
+Thunderduck currently uses DuckDB JDBC `1.4.3.0`. The extension is built against
+DuckDB `v1.4.4`. These must match. Either:
+
+- Rebuild the extension against v1.4.3:
+  ```bash
+  cd duckdb && git checkout v1.4.3
+  cd .. && GEN=ninja make clean && GEN=ninja make release
+  ```
+- Or update Thunderduck's `pom.xml`:
+  ```xml
+  <duckdb.version>1.4.4.0</duckdb.version>
+  ```
+
+DuckDB enforces a strict version check at load time and will refuse to load an
+extension compiled against a different version.
+
+## Bundle the Extension as a JAR Resource
+
+Place the compiled `.duckdb_extension` binary under the `core` module's
+resources, organized by platform:
+
+```
+core/src/main/resources/
+  extensions/
+    osx_arm64/
+      thdck_spark_funcs.duckdb_extension
+    linux_amd64/
+      thdck_spark_funcs.duckdb_extension
+```
+
+Platform strings correspond to `PRAGMA platform` output. Common values:
+
+| Platform             | OS    | Architecture                   |
+|----------------------|-------|--------------------------------|
+| `osx_arm64`          | macOS | AArch64 (Apple Silicon)        |
+| `osx_amd64`          | macOS | x86_64 (Intel)                 |
+| `linux_amd64`        | Linux | x86_64                         |
+| `linux_amd64_gcc4`   | Linux | x86_64 (GCC4 ABI, Python/CLI) |
+| `linux_arm64`        | Linux | AArch64 (AWS Graviton)         |
+| `windows_amd64`      | Windows | x86_64                       |
+
+Cross-compile the extension for each target platform as needed.
+
+## Modify DuckDBRuntime
+
+All changes go in `core/src/main/java/com/thunderduck/runtime/DuckDBRuntime.java`.
+
+### 1. Allow Unsigned Extensions
+
+The extension is not signed by DuckDB's official key. The `allow_unsigned_extensions`
+property **must** be set at connection creation time (it cannot be changed via
+`SET` after the connection is established).
+
+In the constructor, add the property before calling `DriverManager.getConnection()`:
+
+```java
+Properties props = new Properties();
+props.setProperty(DuckDBDriver.JDBC_STREAM_RESULTS, "true");
+props.setProperty("allow_unsigned_extensions", "true");  // required for custom extensions
+Connection rawConn = DriverManager.getConnection(jdbcUrl, props);
+```
+
+### 2. Add Extension Loading Methods
+
+```java
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+
+private void loadBundledExtensions() throws SQLException {
+    String platform;
+    try (Statement stmt = connection.createStatement();
+         ResultSet rs = stmt.executeQuery("PRAGMA platform")) {
+        rs.next();
+        platform = rs.getString(1);
+    }
+
+    loadExtensionResource(platform, "thdck_spark_funcs");
+}
+
+private void loadExtensionResource(String platform, String extName) throws SQLException {
+    String resourcePath = "/extensions/" + platform + "/" + extName + ".duckdb_extension";
+    try (InputStream is = getClass().getResourceAsStream(resourcePath)) {
+        if (is == null) {
+            throw new SQLException(
+                "Extension '" + extName + "' not bundled for platform: " + platform);
+        }
+        Path tempDir = Files.createTempDirectory("thunderduck-ext-");
+        Path tempFile = tempDir.resolve(extName + ".duckdb_extension");
+        Files.copy(is, tempFile, StandardCopyOption.REPLACE_EXISTING);
+        tempFile.toFile().deleteOnExit();
+        tempDir.toFile().deleteOnExit();
+
+        try (Statement stmt = connection.createStatement()) {
+            stmt.execute("LOAD '" + tempFile.toAbsolutePath() + "'");
+        }
+    } catch (IOException e) {
+        throw new SQLException("Failed to extract extension: " + extName, e);
+    }
+}
+```
+
+### 3. Call After Configuration
+
+In the constructor, call `loadBundledExtensions()` after `configureConnection()`:
+
+```java
+configureConnection();
+loadBundledExtensions();
+```
+
+## How It Works
+
+1. At connection creation, `allow_unsigned_extensions` is set as a JDBC property
+   so DuckDB permits loading non-official extensions.
+2. `loadBundledExtensions()` queries `PRAGMA platform` to determine the current
+   OS/architecture (e.g. `osx_arm64`).
+3. The matching `.duckdb_extension` binary is read from the classpath (inside the
+   JAR) and written to a temporary file.
+
+4. `LOAD '/tmp/.../thdck_spark_funcs.duckdb_extension'` loads the extension into
+   the DuckDB instance for the current session.
+5. Temp files are cleaned up on JVM exit.
+
+## Usage
+
+Once loaded, any SQL generated by the translation engine can reference the
+extension's function:
+
+```sql
+SELECT spark_decimal_div(col_a, col_b) FROM my_table;
+```
+
+No explicit `INSTALL` or `LOAD` is needed in application code beyond the
+automatic loading in `DuckDBRuntime`.
+
+## Alternative: Persistent Installation
+
+If you prefer to install the extension into DuckDB's cache so it persists across
+JVM restarts (avoiding re-extraction each time), replace the `LOAD` call with
+`INSTALL` + `LOAD`:
+
+```java
+stmt.execute("INSTALL '" + tempFile.toAbsolutePath() + "'");
+stmt.execute("LOAD thdck_spark_funcs");
+```
+
+This copies the binary to `~/.duckdb/extensions/<version>/<platform>/` and
+subsequent sessions can load it by name. Use `FORCE INSTALL` if re-installing
+over a previously installed version.
+
+## Constraints
+
+- **Version lock**: The extension binary, the DuckDB submodule it was compiled
+  against, and the `duckdb_jdbc` Maven dependency must all be the same DuckDB
+  version. A mismatch causes a hard load error.
+- **Platform lock**: The extension is compiled for a specific OS and CPU
+  architecture. Bundle binaries for each platform you deploy to.
+- **Unsigned**: Custom extensions require `allow_unsigned_extensions=true` set
+  as a connection property (not via SQL `SET`).
+- **Per-connection**: `LOAD` applies to the current connection. Each new
+  `DuckDBRuntime` instance must load the extension.

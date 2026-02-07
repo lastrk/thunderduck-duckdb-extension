@@ -1,8 +1,8 @@
 # name: test/sql/table_operations.test
 # description: Tests with table data and vector processing
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # --- Setup: create table with DECIMAL columns ---
 statement ok

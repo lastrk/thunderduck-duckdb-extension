@@ -1,8 +1,8 @@
 # name: test/sql/precision_rules.test
 # description: Verify Spark 4.1 decimal division type rules
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # DECIMAL(10,2) / DECIMAL(10,2) -> DECIMAL(23,13)
 # result_scale = max(6, 2+10+1) = 13

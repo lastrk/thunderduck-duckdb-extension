@@ -1,8 +1,8 @@
 # name: test/sql/null_handling.test
 # description: NULL propagation and division by zero
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # NULL dividend -> NULL
 query I

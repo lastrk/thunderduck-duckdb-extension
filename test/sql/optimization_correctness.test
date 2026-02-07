@@ -1,8 +1,8 @@
 # name: test/sql/optimization_correctness.test
 # description: Tests verifying correctness of optimization code paths (P1-P9)
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # ===========================================================================
 # P1: Pow10 hoisted out of per-row loop

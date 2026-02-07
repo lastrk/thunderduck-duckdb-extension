@@ -1,8 +1,8 @@
 # name: test/sql/error_handling.test
 # description: Error handling for invalid inputs
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # INTEGER arguments should produce an error
 statement error

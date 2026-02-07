@@ -1,8 +1,8 @@
 # name: test/sql/wide_arithmetic.test
 # description: Tests exercising the 256-bit slow path in SparkDecimalDivide
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # --- Slow path trigger analysis ---
 # The slow path is taken when abs_a * 10^scale_adj overflows unsigned __int128 (max ~3.4e38).

@@ -1,6 +1,6 @@
 #define DUCKDB_EXTENSION_MAIN
 
-#include "spark_decimal_div_extension.hpp"
+#include "thdck_spark_funcs_extension.hpp"
 #include "spark_precision.hpp"
 #include "decimal_division.hpp"
 
@@ -153,23 +153,23 @@ static void LoadInternal(ExtensionLoader &loader) {
 // Extension class methods
 // ---------------------------------------------------------------------------
 
-void SparkDecimalDivExtension::Load(ExtensionLoader &loader) {
+void ThdckSparkFuncsExtension::Load(ExtensionLoader &loader) {
 	LoadInternal(loader);
 }
 
-std::string SparkDecimalDivExtension::Name() {
-	return "spark_decimal_div";
+std::string ThdckSparkFuncsExtension::Name() {
+	return "thdck_spark_funcs";
 }
 
 } // namespace duckdb
 
 extern "C" {
 
-DUCKDB_CPP_EXTENSION_ENTRY(spark_decimal_div, loader) {
+DUCKDB_CPP_EXTENSION_ENTRY(thdck_spark_funcs, loader) {
 	duckdb::LoadInternal(loader);
 }
 
-DUCKDB_EXTENSION_API const char *spark_decimal_div_version() {
+DUCKDB_EXTENSION_API const char *thdck_spark_funcs_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
 

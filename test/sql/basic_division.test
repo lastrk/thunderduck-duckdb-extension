@@ -1,8 +1,8 @@
 # name: test/sql/basic_division.test
 # description: Basic spark_decimal_div functionality
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # Simple division: 10 / 3
 query I

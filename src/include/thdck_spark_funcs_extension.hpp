@@ -5,7 +5,7 @@
 
 namespace duckdb {
 
-class SparkDecimalDivExtension : public Extension {
+class ThdckSparkFuncsExtension : public Extension {
 public:
 	void Load(ExtensionLoader &loader) override;
 	std::string Name() override;

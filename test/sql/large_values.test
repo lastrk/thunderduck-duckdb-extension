@@ -1,8 +1,8 @@
 # name: test/sql/large_values.test
 # description: Tests with extreme and boundary decimal values
-# group: [spark_decimal_div]
+# group: [thdck_spark_funcs]
 
-require spark_decimal_div
+require thdck_spark_funcs
 
 # --- Tests using DECIMAL(10,0) max value (10 nines) ---
 # DECIMAL(10,0) / DECIMAL(10,0): result type DECIMAL(21,11), scale_adj = 11
