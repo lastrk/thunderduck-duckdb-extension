@@ -34,7 +34,7 @@ inline __int128 SparkDecimalDivide(__int128 a, __int128 b, unsigned __int128 pow
 		unsigned __int128 scaled;
 		bool overflow = __builtin_mul_overflow(abs_a, pow10_val, &scaled);
 
-		if (!overflow) {
+		if (__builtin_expect(!overflow, 1)) {
 			// Fast path: fits in 128 bits
 			quotient = scaled / abs_b;
 			remainder = scaled % abs_b;
@@ -46,17 +46,17 @@ inline __int128 SparkDecimalDivide(__int128 a, __int128 b, unsigned __int128 pow
 	}
 
 	// ROUND_HALF_UP: round away from zero when remainder >= half of divisor.
-	// Equivalent to: if (2 * remainder >= abs_b) then round up.
+	// Branchless: add 1 if (2 * remainder >= abs_b), 0 otherwise.
 	// Note: 2 * remainder cannot overflow unsigned __int128 because
 	// remainder < abs_b <= 10^38, and 2 * 10^38 < 2^128.
-	unsigned __int128 double_rem = remainder * 2;
-	if (double_rem >= abs_b) {
-		quotient++;
-	}
+	quotient += static_cast<unsigned __int128>(remainder * 2 >= abs_b);
 
-	// Apply sign
-	__int128 signed_result = static_cast<__int128>(quotient);
-	return negative ? -signed_result : signed_result;
+	// Apply sign branchlessly using two's complement arithmetic:
+	// If negative: result = ~quotient + 1 = -(quotient)
+	// If positive: result = quotient
+	unsigned __int128 sign_mask = -static_cast<unsigned __int128>(negative);
+	unsigned __int128 result_unsigned = (quotient ^ sign_mask) + (sign_mask & 1);
+	return static_cast<__int128>(result_unsigned);
 }
 
 } // namespace duckdb

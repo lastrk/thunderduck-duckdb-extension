@@ -44,15 +44,15 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 
 	idx_t count = args.size();
 	result.SetVectorType(VectorType::FLAT_VECTOR);
-	auto result_data = FlatVector::GetData<RESULT_TYPE>(result);
+	auto *__restrict result_data = FlatVector::GetData<RESULT_TYPE>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
 	UnifiedVectorFormat a_fmt, b_fmt;
 	args.data[0].ToUnifiedFormat(count, a_fmt);
 	args.data[1].ToUnifiedFormat(count, b_fmt);
 
-	auto a_data = UnifiedVectorFormat::GetData<hugeint_t>(a_fmt);
-	auto b_data = UnifiedVectorFormat::GetData<hugeint_t>(b_fmt);
+	const auto *__restrict a_data = UnifiedVectorFormat::GetData<hugeint_t>(a_fmt);
+	const auto *__restrict b_data = UnifiedVectorFormat::GetData<hugeint_t>(b_fmt);
 
 	for (idx_t i = 0; i < count; i++) {
 		auto a_idx = a_fmt.sel->get_index(i);
@@ -66,8 +66,8 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 
 		__int128 b_val = HugeintToInt128(b_data[b_idx]);
 
-		// Division by zero -> NULL
-		if (b_val == 0) {
+		// Division by zero -> NULL (unlikely in normal data)
+		if (__builtin_expect(b_val == 0, 0)) {
 			result_validity.SetInvalid(i);
 			continue;
 		}
