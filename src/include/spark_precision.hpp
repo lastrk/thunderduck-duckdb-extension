@@ -44,6 +44,20 @@ inline SparkDecimalResult ComputeDivisionType(uint8_t p1, uint8_t s1, uint8_t p2
 	return {result_precision, result_scale};
 }
 
+// Spark: SUM(DECIMAL(p,s)) -> DECIMAL(min(p+10, 38), s)
+inline SparkDecimalResult ComputeSumType(uint8_t p, uint8_t s) {
+	uint8_t result_precision = std::min(static_cast<uint8_t>(p + 10), SPARK_MAX_PRECISION);
+	return {result_precision, s};
+}
+
+// Spark: AVG(DECIMAL(p,s)) -> DECIMAL(min(p+4, 38), min(s+4, 18))
+inline SparkDecimalResult ComputeAvgType(uint8_t p, uint8_t s) {
+	uint8_t result_precision = std::min(static_cast<uint8_t>(p + 4), SPARK_MAX_PRECISION);
+	uint8_t result_scale = std::min(static_cast<uint8_t>(s + 4), static_cast<uint8_t>(18));
+	result_scale = std::min(result_scale, result_precision);
+	return {result_precision, result_scale};
+}
+
 // Bind data storing precomputed division parameters.
 struct SparkDivBindData : public FunctionData {
 	uint32_t scale_adj; // result_scale - s1 + s2

@@ -3,10 +3,12 @@
 #include "thdck_spark_funcs_extension.hpp"
 #include "spark_precision.hpp"
 #include "decimal_division.hpp"
+#include "spark_aggregates.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
 #include "duckdb/function/scalar_function.hpp"
+#include "duckdb/function/function_set.hpp"
 #include "duckdb/planner/expression/bound_function_expression.hpp"
 
 namespace duckdb {
@@ -158,6 +160,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 	                        LogicalType::ANY, SparkDivExec<hugeint_t>, BindSparkDecimalDiv);
 	div_func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	loader.AddFunctionOverload(div_func);
+
+	// Spark-compatible aggregate functions
+	loader.RegisterFunction(CreateSparkSumFunctionSet());
+	loader.RegisterFunction(CreateSparkAvgFunctionSet());
+	// COUNT not needed — DuckDB COUNT already returns BIGINT (matches Spark)
 }
 
 // ---------------------------------------------------------------------------
