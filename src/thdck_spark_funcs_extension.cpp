@@ -86,14 +86,51 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 // Bind function: resolve types and select implementation
 // ---------------------------------------------------------------------------
 
+// Helper: promote an integer LogicalType to a DECIMAL(p, 0) equivalent.
+// Returns the DECIMAL type if promotion is possible, or an invalid type otherwise.
+static LogicalType PromoteIntToDecimal(const LogicalType &type) {
+	switch (type.id()) {
+	case LogicalTypeId::TINYINT:
+		return LogicalType::DECIMAL(3, 0);
+	case LogicalTypeId::SMALLINT:
+		return LogicalType::DECIMAL(5, 0);
+	case LogicalTypeId::INTEGER:
+		return LogicalType::DECIMAL(10, 0);
+	case LogicalTypeId::BIGINT:
+		return LogicalType::DECIMAL(19, 0);
+	case LogicalTypeId::HUGEINT:
+		return LogicalType::DECIMAL(38, 0);
+	default:
+		return LogicalType::INVALID;
+	}
+}
+
 static unique_ptr<FunctionData> BindSparkDecimalDiv(ClientContext &context,
                                                      ScalarFunction &bound_function,
                                                      vector<unique_ptr<Expression>> &arguments) {
-	auto &type_a = arguments[0]->return_type;
-	auto &type_b = arguments[1]->return_type;
+	auto type_a = arguments[0]->return_type;
+	auto type_b = arguments[1]->return_type;
+
+	// Promote integer types to DECIMAL(p, 0) when paired with a DECIMAL operand.
+	// This handles expressions like `95 / 100.0` where DuckDB resolves 95 as INTEGER
+	// and 100.0 as DECIMAL. The `/` operator override catches this via implicit cast
+	// matching, but the bind function receives the original (pre-cast) types.
+	if (type_a.id() != LogicalTypeId::DECIMAL) {
+		auto promoted = PromoteIntToDecimal(type_a);
+		if (promoted.id() != LogicalTypeId::INVALID) {
+			type_a = promoted;
+		}
+	}
+	if (type_b.id() != LogicalTypeId::DECIMAL) {
+		auto promoted = PromoteIntToDecimal(type_b);
+		if (promoted.id() != LogicalTypeId::INVALID) {
+			type_b = promoted;
+		}
+	}
 
 	if (type_a.id() != LogicalTypeId::DECIMAL || type_b.id() != LogicalTypeId::DECIMAL) {
-		throw InvalidInputException("spark_decimal_div requires DECIMAL arguments");
+		throw InvalidInputException("spark_decimal_div requires DECIMAL arguments, got %s and %s",
+		                            type_a.ToString(), type_b.ToString());
 	}
 
 	uint8_t p1 = DecimalType::GetWidth(type_a);
