@@ -118,6 +118,22 @@ static AggregateFunction GetSparkSumDecimalFunction() {
 	    LogicalType::DECIMAL(38, 0), LogicalType::DECIMAL(38, 0));
 }
 
+// Helper: look up the SparkSumDecimal function for a given physical type
+static AggregateFunction GetSparkSumByPhysicalType(PhysicalType pt) {
+	switch (pt) {
+	case PhysicalType::INT16:
+		return GetSparkSumDecimalFunction<int16_t>();
+	case PhysicalType::INT32:
+		return GetSparkSumDecimalFunction<int32_t>();
+	case PhysicalType::INT64:
+		return GetSparkSumDecimalFunction<int64_t>();
+	case PhysicalType::INT128:
+		return GetSparkSumDecimalFunction<hugeint_t>();
+	default:
+		throw InternalException("Unexpected physical type for spark_sum DECIMAL result");
+	}
+}
+
 static unique_ptr<FunctionData> BindSparkSumDecimal(ClientContext &context, AggregateFunction &function,
                                                      vector<unique_ptr<Expression>> &arguments) {
 	auto &type = arguments[0]->return_type;
@@ -135,22 +151,8 @@ static unique_ptr<FunctionData> BindSparkSumDecimal(ClientContext &context, Aggr
 	function.return_type = result_type;
 
 	// Select the correct function implementation based on result physical type
-	// The finalize function must write to the correct physical type for the result DECIMAL.
 	{
-		AggregateFunction tf = [&]() -> AggregateFunction {
-			switch (result_type.InternalType()) {
-			case PhysicalType::INT16:
-				return GetSparkSumDecimalFunction<int16_t>();
-			case PhysicalType::INT32:
-				return GetSparkSumDecimalFunction<int32_t>();
-			case PhysicalType::INT64:
-				return GetSparkSumDecimalFunction<int64_t>();
-			case PhysicalType::INT128:
-				return GetSparkSumDecimalFunction<hugeint_t>();
-			default:
-				throw InternalException("Unexpected physical type for spark_sum DECIMAL result");
-			}
-		}();
+		auto tf = GetSparkSumByPhysicalType(result_type.InternalType());
 		function.update = tf.update;
 		function.combine = tf.combine;
 		function.finalize = tf.finalize;
@@ -300,6 +302,22 @@ static AggregateFunction GetSparkAvgDecimalFunction() {
 	    LogicalType::DECIMAL(38, 0), LogicalType::DECIMAL(38, 0));
 }
 
+// Helper: look up the SparkAvgDecimal function for a given physical type
+static AggregateFunction GetSparkAvgByPhysicalType(PhysicalType pt) {
+	switch (pt) {
+	case PhysicalType::INT16:
+		return GetSparkAvgDecimalFunction<int16_t>();
+	case PhysicalType::INT32:
+		return GetSparkAvgDecimalFunction<int32_t>();
+	case PhysicalType::INT64:
+		return GetSparkAvgDecimalFunction<int64_t>();
+	case PhysicalType::INT128:
+		return GetSparkAvgDecimalFunction<hugeint_t>();
+	default:
+		throw InternalException("Unexpected physical type for spark_avg DECIMAL result");
+	}
+}
+
 static unique_ptr<FunctionData> BindSparkAvgDecimal(ClientContext &context, AggregateFunction &function,
                                                      vector<unique_ptr<Expression>> &arguments) {
 	auto &type = arguments[0]->return_type;
@@ -318,20 +336,7 @@ static unique_ptr<FunctionData> BindSparkAvgDecimal(ClientContext &context, Aggr
 
 	// Select the correct function implementation based on result physical type
 	{
-		AggregateFunction tf = [&]() -> AggregateFunction {
-			switch (result_type.InternalType()) {
-			case PhysicalType::INT16:
-				return GetSparkAvgDecimalFunction<int16_t>();
-			case PhysicalType::INT32:
-				return GetSparkAvgDecimalFunction<int32_t>();
-			case PhysicalType::INT64:
-				return GetSparkAvgDecimalFunction<int64_t>();
-			case PhysicalType::INT128:
-				return GetSparkAvgDecimalFunction<hugeint_t>();
-			default:
-				throw InternalException("Unexpected physical type for spark_avg DECIMAL result");
-			}
-		}();
+		auto tf = GetSparkAvgByPhysicalType(result_type.InternalType());
 		function.update = tf.update;
 		function.combine = tf.combine;
 		function.finalize = tf.finalize;
