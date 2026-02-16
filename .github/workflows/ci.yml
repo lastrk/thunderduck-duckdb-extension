@@ -36,6 +36,7 @@ jobs:
         run: GEN=ninja make release
         env:
           BUILD_EXTENSION_TEST_DEPS: none
+          CMAKE_BUILD_PARALLEL_LEVEL: 2
 
       - name: Run tests
         run: make test
