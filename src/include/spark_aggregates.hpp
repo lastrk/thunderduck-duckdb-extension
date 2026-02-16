@@ -410,4 +410,101 @@ inline AggregateFunctionSet CreateSparkAvgFunctionSet() {
 
 // No CreateSparkCountFunctionSet — DuckDB COUNT already matches Spark.
 
+// ============================================================================
+// spark_skewness: Population skewness (matches Spark's skewness())
+//
+// Spark computes population skewness: mu_3 / mu_2^(3/2)
+// DuckDB's built-in skewness() applies sample bias correction: sqrt(n*(n-1))/(n-2)
+// This implementation computes population skewness directly, without correction.
+//
+// Edge case differences from DuckDB built-in:
+//   - Returns NULL for n <= 1 (DuckDB returns NULL for n <= 2)
+//   - Returns NULL for zero variance (DuckDB returns NaN)
+// ============================================================================
+
+// Reuse same state layout as DuckDB's SkewState
+struct SparkSkewState {
+	size_t n;
+	double sum;
+	double sum_sqr;
+	double sum_cub;
+};
+
+struct SparkSkewnessOperation {
+	template <class STATE>
+	static void Initialize(STATE &state) {
+		state.n = 0;
+		state.sum = state.sum_sqr = state.sum_cub = 0;
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input,
+	                              idx_t count) {
+		for (idx_t i = 0; i < count; i++) {
+			Operation<INPUT_TYPE, STATE, OP>(state, input, unary_input);
+		}
+	}
+
+	template <class INPUT_TYPE, class STATE, class OP>
+	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		state.n++;
+		state.sum += input;
+		state.sum_sqr += pow(input, 2);
+		state.sum_cub += pow(input, 3);
+	}
+
+	template <class STATE, class OP>
+	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
+		if (source.n == 0) {
+			return;
+		}
+		target.n += source.n;
+		target.sum += source.sum;
+		target.sum_sqr += source.sum_sqr;
+		target.sum_cub += source.sum_cub;
+	}
+
+	template <class TARGET_TYPE, class STATE>
+	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
+		// Spark returns NULL for n <= 1
+		if (state.n <= 1) {
+			finalize_data.ReturnNull();
+			return;
+		}
+		double n = state.n;
+		double temp = 1.0 / n;
+		// variance = (1/n) * (sum_sqr - sum^2 / n)
+		double variance = temp * (state.sum_sqr - state.sum * state.sum * temp);
+		if (variance < 0) {
+			variance = 0; // Floating point guard
+		}
+		double div = std::pow(variance, 1.5); // stddev^3 = variance^(3/2)
+		if (div == 0) {
+			// Spark returns NULL for zero variance (not NaN like DuckDB)
+			finalize_data.ReturnNull();
+			return;
+		}
+		// Population skewness: mu_3 / mu_2^(3/2)
+		// mu_3 = (1/n) * (sum_cub - 3*sum_sqr*sum/n + 2*sum^3/n^2)
+		double mu3 = temp * (state.sum_cub - 3 * state.sum_sqr * state.sum * temp +
+		                     2 * pow(state.sum, 3) * temp * temp);
+		target = mu3 / div;
+		if (!Value::DoubleIsFinite(target)) {
+			throw OutOfRangeException("SKEW is out of range!");
+		}
+	}
+
+	static bool IgnoreNull() {
+		return true;
+	}
+};
+
+inline AggregateFunction CreateSparkSkewnessFunction() {
+	auto func = AggregateFunction::UnaryAggregate<SparkSkewState, double, double, SparkSkewnessOperation>(
+	    LogicalType::DOUBLE, LogicalType::DOUBLE);
+	func.name = "spark_skewness";
+	func.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
+	return func;
+}
+
 } // namespace duckdb

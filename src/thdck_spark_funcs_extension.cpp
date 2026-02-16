@@ -196,6 +196,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	// Spark-compatible aggregate functions
 	loader.RegisterFunction(CreateSparkSumFunctionSet());
 	loader.RegisterFunction(CreateSparkAvgFunctionSet());
+	loader.RegisterFunction(CreateSparkSkewnessFunction());
 	// COUNT not needed — DuckDB COUNT already returns BIGINT (matches Spark)
 }
 
