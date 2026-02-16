@@ -68,21 +68,13 @@ inline uint256_t Mul128(unsigned __int128 a, unsigned __int128 b) {
 // Divide a 256-bit unsigned value by a 128-bit unsigned divisor.
 // Returns quotient (must fit in 128 bits) and sets *remainder.
 //
-// Uses two-step decomposition: treat the 256-bit numerator as (hi * 2^128 + lo),
-// then compute quotient and remainder via two 128-bit divisions. This avoids
-// the 256-iteration bit-by-bit loop of the naive approach.
-//
-// Step 1: hi / den = q_hi, r_hi  (q_hi must be 0 for result to fit in 128 bits)
-// Step 2: (r_hi * 2^128 + lo) / den = q_lo, r_lo
-//
-// Step 2 requires dividing a value that can be up to 256 bits by a 128-bit divisor.
-// We decompose it further using 64-bit limbs when the intermediate values exceed
-// 128 bits, falling back to the hardware's native 128-bit division.
+// Uses Knuth's Algorithm D with 64-bit "digits" for the main path,
+// replacing the 128-iteration bit-by-bit binary long division.
+// Special fast paths for num.hi == 0 and den < 2^64.
 inline unsigned __int128 Div256By128(uint256_t num, unsigned __int128 den,
                                      unsigned __int128 *remainder) {
-	// If hi < den, we can skip step 1 (q_hi = 0, r_hi = hi)
+	// Fast path: high part is zero -> simple 128-bit division
 	if (num.hi == 0) {
-		// Simple case: 128-bit / 128-bit
 		unsigned __int128 quot = num.lo / den;
 		if (remainder) {
 			*remainder = num.lo % den;
@@ -90,74 +82,122 @@ inline unsigned __int128 Div256By128(uint256_t num, unsigned __int128 den,
 		return quot;
 	}
 
-	// Step 1: divide hi by den
 	D_ASSERT(num.hi < den); // quotient must fit in 128 bits
-	unsigned __int128 r_hi = num.hi;
 
-	// Step 2: divide (r_hi * 2^128 + lo) by den
-	// We need to handle this carefully since r_hi * 2^128 doesn't fit in 128 bits.
-	// Decompose using 64-bit halves of lo.
-	//
-	// Let lo = lo_hi * 2^64 + lo_lo
-	// (r_hi * 2^128 + lo) = (r_hi * 2^64 + lo_hi) * 2^64 + lo_lo
-	//
-	// Step 2a: (r_hi * 2^64 + lo_hi) / den = q2a, r2a
-	//   But r_hi * 2^64 + lo_hi can exceed 128 bits if r_hi >= 2^64.
-	//   However, we know r_hi < den, and we work with the 64-bit halves.
+	// Fast path: divisor fits in 64 bits -> 3-digit by 1-digit division
+	if (static_cast<uint64_t>(den >> 64) == 0) {
+		uint64_t d = static_cast<uint64_t>(den);
+		// num.hi < den < 2^64, so num.hi fits in 64 bits
+		uint64_t hi_lo = static_cast<uint64_t>(num.hi);
+		uint64_t lo_hi = static_cast<uint64_t>(num.lo >> 64);
+		uint64_t lo_lo = static_cast<uint64_t>(num.lo);
 
-	uint64_t lo_hi = static_cast<uint64_t>(num.lo >> 64);
-	uint64_t lo_lo = static_cast<uint64_t>(num.lo);
+		// First digit: [hi_lo, lo_hi] / d
+		unsigned __int128 tmp = (static_cast<unsigned __int128>(hi_lo) << 64) | lo_hi;
+		uint64_t q1 = static_cast<uint64_t>(tmp / d);
+		uint64_t r1 = static_cast<uint64_t>(tmp % d);
 
-	// Compute (r_hi * 2^64 + lo_hi) as a 192-bit value, then divide by den.
-	// Since r_hi < den (128-bit), r_hi * 2^64 needs up to 192 bits.
-	// We use iterative 64-bit digit extraction.
+		// Second digit: [r1, lo_lo] / d
+		tmp = (static_cast<unsigned __int128>(r1) << 64) | lo_lo;
+		uint64_t q0 = static_cast<uint64_t>(tmp / d);
+		uint64_t r0 = static_cast<uint64_t>(tmp % d);
 
-	// Process the upper 64-bit digit of lo:
-	// Form the 192-bit value: (r_hi << 64) | lo_hi, divide by den
-	// This is equivalent to: remainder * 2^64 + next_digit, iterated.
-
-	// Shift remainder up by 64 bits and add lo_hi
-	// r_hi is < den, so (r_hi << 64 + lo_hi) may be > 2^128.
-	// We handle this by noting that if r_hi < den, then after dividing
-	// (r_hi * 2^64 + lo_hi) by den, the quotient fits in 64 bits.
-
-	// Use the identity: (A * 2^64 + B) / D where A < D (128-bit)
-	// q = 0 or 1 iteration of subtract-and-shift won't work directly.
-	// Instead, use schoolbook division on 64-bit limbs.
-
-	// For correctness with arbitrary 128-bit divisors, fall back to
-	// binary long division but only over the significant bits.
-	unsigned __int128 quot = 0;
-	unsigned __int128 rem = r_hi;
-
-	// Process the upper 64 bits of lo
-	for (int32_t bit = 63; bit >= 0; bit--) {
-		rem <<= 1;
-		if (lo_hi & (static_cast<uint64_t>(1) << bit)) {
-			rem |= 1;
+		if (remainder) {
+			*remainder = r0;
 		}
-		if (rem >= den) {
-			rem -= den;
-			quot |= (static_cast<unsigned __int128>(1) << (bit + 64));
+		return (static_cast<unsigned __int128>(q1) << 64) | q0;
+	}
+
+	// Knuth's Algorithm D: normalize so top bit of divisor is set
+	uint64_t den_hi = static_cast<uint64_t>(den >> 64);
+	int shift = __builtin_clzll(den_hi);
+
+	// Normalize divisor
+	unsigned __int128 den_norm = den << shift;
+	uint64_t d1 = static_cast<uint64_t>(den_norm >> 64);
+	uint64_t d0 = static_cast<uint64_t>(den_norm);
+
+	// Normalize numerator (256-bit left shift by 'shift')
+	unsigned __int128 n_hi, n_lo;
+	if (shift > 0) {
+		n_hi = (num.hi << shift) | (num.lo >> (128 - shift));
+		n_lo = num.lo << shift;
+	} else {
+		n_hi = num.hi;
+		n_lo = num.lo;
+	}
+
+	// Split into 64-bit limbs: n = [n3, n2, n1, n0]
+	uint64_t n3 = static_cast<uint64_t>(n_hi >> 64);
+	uint64_t n2 = static_cast<uint64_t>(n_hi);
+	uint64_t n1 = static_cast<uint64_t>(n_lo >> 64);
+	uint64_t n0 = static_cast<uint64_t>(n_lo);
+
+	// First quotient digit: q1 = floor([n3, n2, n1] / [d1, d0])
+	// Estimate: qhat = floor([n3, n2] / d1)
+	unsigned __int128 tmp = (static_cast<unsigned __int128>(n3) << 64) | n2;
+	uint64_t qhat = static_cast<uint64_t>(tmp / d1);
+	uint64_t rhat = static_cast<uint64_t>(tmp % d1);
+
+	// Refine: while qhat * d0 > [rhat, n1]
+	while (static_cast<unsigned __int128>(qhat) * d0 >
+	       ((static_cast<unsigned __int128>(rhat) << 64) | n1)) {
+		qhat--;
+		rhat += d1;
+		if (rhat < d1) {
+			break; // overflow means rhat >= 2^64, condition is false
 		}
 	}
 
-	// Process the lower 64 bits of lo
-	for (int32_t bit = 63; bit >= 0; bit--) {
-		rem <<= 1;
-		if (lo_lo & (static_cast<uint64_t>(1) << bit)) {
-			rem |= 1;
-		}
-		if (rem >= den) {
-			rem -= den;
-			quot |= (static_cast<unsigned __int128>(1) << bit);
+	// Compute partial remainder: [n3,n2,n1] - qhat * [d1,d0]
+	unsigned __int128 hi_part = tmp - static_cast<unsigned __int128>(qhat) * d1;
+	unsigned __int128 rem_hi_lo = (hi_part << 64) | n1;
+	unsigned __int128 sub = static_cast<unsigned __int128>(qhat) * d0;
+
+	// Check for borrow and correct
+	if (rem_hi_lo < sub) {
+		qhat--;
+		rem_hi_lo += den_norm;
+	}
+	unsigned __int128 rem1 = rem_hi_lo - sub;
+
+	uint64_t q1 = qhat;
+
+	// Second quotient digit: q0 = floor([rem1, n0] / [d1, d0])
+	uint64_t rem1_hi = static_cast<uint64_t>(rem1 >> 64);
+	uint64_t rem1_lo = static_cast<uint64_t>(rem1);
+
+	tmp = (static_cast<unsigned __int128>(rem1_hi) << 64) | rem1_lo;
+	qhat = static_cast<uint64_t>(tmp / d1);
+	rhat = static_cast<uint64_t>(tmp % d1);
+
+	while (static_cast<unsigned __int128>(qhat) * d0 >
+	       ((static_cast<unsigned __int128>(rhat) << 64) | n0)) {
+		qhat--;
+		rhat += d1;
+		if (rhat < d1) {
+			break;
 		}
 	}
 
+	hi_part = tmp - static_cast<unsigned __int128>(qhat) * d1;
+	rem_hi_lo = (hi_part << 64) | n0;
+	sub = static_cast<unsigned __int128>(qhat) * d0;
+
+	if (rem_hi_lo < sub) {
+		qhat--;
+		rem_hi_lo += den_norm;
+	}
+	unsigned __int128 rem_final = rem_hi_lo - sub;
+
+	uint64_t q0 = qhat;
+
+	// Un-normalize remainder
 	if (remainder) {
-		*remainder = rem;
+		*remainder = rem_final >> shift;
 	}
-	return quot;
+
+	return (static_cast<unsigned __int128>(q1) << 64) | q0;
 }
 
 // ---------------------------------------------------------------------------

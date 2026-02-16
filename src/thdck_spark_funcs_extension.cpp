@@ -4,6 +4,7 @@
 #include "spark_precision.hpp"
 #include "decimal_division.hpp"
 #include "spark_aggregates.hpp"
+#include "spark_schema_of_json.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -49,9 +50,52 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 	auto *__restrict result_data = FlatVector::GetData<RESULT_TYPE>(result);
 	auto &result_validity = FlatVector::Validity(result);
 
+	// Fast path: both inputs are flat vectors (avoids UnifiedVectorFormat overhead)
+	auto &a_vec = args.data[0];
+	auto &b_vec = args.data[1];
+
+	if (a_vec.GetVectorType() == VectorType::FLAT_VECTOR &&
+	    b_vec.GetVectorType() == VectorType::FLAT_VECTOR) {
+
+		auto *__restrict a_data = FlatVector::GetData<hugeint_t>(a_vec);
+		auto *__restrict b_data = FlatVector::GetData<hugeint_t>(b_vec);
+		auto &a_validity = FlatVector::Validity(a_vec);
+		auto &b_validity = FlatVector::Validity(b_vec);
+
+		if (a_validity.AllValid() && b_validity.AllValid()) {
+			// Fastest path: no nulls, sequential access
+			for (idx_t i = 0; i < count; i++) {
+				__int128 b_val = HugeintToInt128(b_data[i]);
+				if (__builtin_expect(b_val == 0, 0)) {
+					result_validity.SetInvalid(i);
+					continue;
+				}
+				__int128 a_val = HugeintToInt128(a_data[i]);
+				WriteResult(result_data, i, SparkDecimalDivide(a_val, b_val, pow10_val));
+			}
+		} else {
+			// Flat but with nulls
+			for (idx_t i = 0; i < count; i++) {
+				if (!a_validity.RowIsValid(i) || !b_validity.RowIsValid(i)) {
+					result_validity.SetInvalid(i);
+					continue;
+				}
+				__int128 b_val = HugeintToInt128(b_data[i]);
+				if (__builtin_expect(b_val == 0, 0)) {
+					result_validity.SetInvalid(i);
+					continue;
+				}
+				__int128 a_val = HugeintToInt128(a_data[i]);
+				WriteResult(result_data, i, SparkDecimalDivide(a_val, b_val, pow10_val));
+			}
+		}
+		return;
+	}
+
+	// Generic path: handles constant vectors, dictionary vectors, etc.
 	UnifiedVectorFormat a_fmt, b_fmt;
-	args.data[0].ToUnifiedFormat(count, a_fmt);
-	args.data[1].ToUnifiedFormat(count, b_fmt);
+	a_vec.ToUnifiedFormat(count, a_fmt);
+	b_vec.ToUnifiedFormat(count, b_fmt);
 
 	const auto *__restrict a_data = UnifiedVectorFormat::GetData<hugeint_t>(a_fmt);
 	const auto *__restrict b_data = UnifiedVectorFormat::GetData<hugeint_t>(b_fmt);
@@ -187,20 +231,11 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	loader.RegisterFunction(func);
 
-	// Also override the `/` operator for DECIMAL types so that raw SQL
-	// (spark.sql("SELECT a / b ...")) automatically uses Spark semantics.
-	// We register a `/` overload with DECIMAL arguments. DuckDB merges
-	// overloads with AddFunctionOverload, so DECIMAL/DECIMAL division
-	// resolves to our Spark-compatible function while int/float/etc.
-	// continue using the built-in behavior.
-	ScalarFunction div_func("/", {LogicalType::DECIMAL(38, 0), LogicalType::DECIMAL(38, 0)},
-	                        LogicalType::ANY, SparkDivExec<hugeint_t>, BindSparkDecimalDiv);
-	div_func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
-	loader.AddFunctionOverload(div_func);
-
 	// Spark-compatible aggregate functions
 	loader.RegisterFunction(CreateSparkSumFunctionSet());
 	loader.RegisterFunction(CreateSparkAvgFunctionSet());
+	loader.RegisterFunction(CreateSparkSkewnessFunction());
+	loader.RegisterFunction(CreateSparkSchemaOfJsonFunction());
 	// COUNT not needed — DuckDB COUNT already returns BIGINT (matches Spark)
 }
 
