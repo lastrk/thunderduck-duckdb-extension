@@ -4,6 +4,7 @@
 #include "spark_precision.hpp"
 #include "decimal_division.hpp"
 #include "spark_aggregates.hpp"
+#include "spark_schema_of_json.hpp"
 
 #include "duckdb/common/exception.hpp"
 #include "duckdb/common/types/decimal.hpp"
@@ -197,6 +198,7 @@ static void LoadInternal(ExtensionLoader &loader) {
 	loader.RegisterFunction(CreateSparkSumFunctionSet());
 	loader.RegisterFunction(CreateSparkAvgFunctionSet());
 	loader.RegisterFunction(CreateSparkSkewnessFunction());
+	loader.RegisterFunction(CreateSparkSchemaOfJsonFunction());
 	// COUNT not needed — DuckDB COUNT already returns BIGINT (matches Spark)
 }
 
