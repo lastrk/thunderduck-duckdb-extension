@@ -93,7 +93,7 @@ static void SparkSchemaOfJsonExec(DataChunk &args, ExpressionState &state, Vecto
 		    const char *json_cstr = input_str.GetData();
 		    idx_t json_len = input_str.GetSize();
 
-		    yyjson_doc *doc = yyjson_doc_read(json_cstr, json_len, 0);
+		    yyjson_doc *doc = yyjson_read(json_cstr, json_len, 0);
 		    if (!doc) {
 			    mask.SetInvalid(idx);
 			    return string_t();
