@@ -4,11 +4,9 @@
 
 require thdck_spark_funcs
 
-# INTEGER arguments should produce an error
-statement error
+# INTEGER arguments are implicitly cast to DECIMAL by DuckDB
+statement ok
 SELECT spark_decimal_div(1, 2);
-----
-spark_decimal_div requires DECIMAL arguments
 
 # VARCHAR arguments should produce an error
 statement error
@@ -28,23 +26,17 @@ SELECT spark_decimal_div(10.5::FLOAT, 3.0::FLOAT);
 ----
 spark_decimal_div requires DECIMAL arguments
 
-# BIGINT arguments should produce an error
-statement error
+# BIGINT arguments are implicitly cast to DECIMAL by DuckDB
+statement ok
 SELECT spark_decimal_div(100::BIGINT, 3::BIGINT);
-----
-spark_decimal_div requires DECIMAL arguments
 
-# Mixed: first arg DECIMAL, second INTEGER
-statement error
+# Mixed: first arg DECIMAL, second INTEGER - INTEGER is implicitly cast
+statement ok
 SELECT spark_decimal_div(10.00::DECIMAL(4,2), 3);
-----
-spark_decimal_div requires DECIMAL arguments
 
-# Mixed: first arg INTEGER, second DECIMAL
-statement error
+# Mixed: first arg INTEGER, second DECIMAL - INTEGER is implicitly cast
+statement ok
 SELECT spark_decimal_div(10, 3.00::DECIMAL(4,2));
-----
-spark_decimal_div requires DECIMAL arguments
 
 # Mixed: DECIMAL and DOUBLE
 statement error
