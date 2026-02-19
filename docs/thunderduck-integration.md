@@ -12,17 +12,19 @@ load it at runtime when DuckDB is instantiated via JDBC.
 
 ## Version Alignment
 
-Thunderduck currently uses DuckDB JDBC `1.4.3.0`. The extension is built against
-DuckDB `v1.4.4`. These must match. Either:
+Thunderduck currently uses DuckDB JDBC `1.4.4.0`. The extension is built against
+DuckDB `v1.4.4`. These versions must match.
 
-- Rebuild the extension against v1.4.3:
-  ```bash
-  cd duckdb && git checkout v1.4.3
-  cd .. && GEN=ninja make clean && GEN=ninja make release
-  ```
-- Or update Thunderduck's `pom.xml`:
+If the DuckDB version is updated, both the JDBC dependency and the extension
+submodule must be updated together:
+
+- Update the JDBC version in Thunderduck's `pom.xml`:
   ```xml
   <duckdb.version>1.4.4.0</duckdb.version>
+  ```
+- Update the DuckDB submodule to the matching tag:
+  ```bash
+  cd duckdb && git checkout v1.4.4
   ```
 
 DuckDB enforces a strict version check at load time and will refuse to load an
