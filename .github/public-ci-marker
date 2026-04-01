@@ -1,0 +1,4 @@
+# This file is a marker for the public repository CI setup.
+# It is used by the pre-push hook to verify that main-public has not been
+# accidentally reset to the internal main branch.
+# Do not remove this file.
