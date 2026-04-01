@@ -1,6 +1,6 @@
 # name: test/sql/large_values.test
 # description: Tests with extreme and boundary decimal values
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

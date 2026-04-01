@@ -1,6 +1,6 @@
 # name: test/sql/null_handling.test
 # description: NULL propagation and division by zero
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

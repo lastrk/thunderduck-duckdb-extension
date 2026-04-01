@@ -114,8 +114,8 @@ struct SparkSumDecimalOperation {
 template <typename RESULT_TYPE>
 static AggregateFunction GetSparkSumDecimalFunction() {
 	return AggregateFunction::UnaryAggregate<SparkSumDecimalState, hugeint_t, RESULT_TYPE,
-	                                          SparkSumDecimalOperation<RESULT_TYPE>>(
-	    LogicalType::DECIMAL(38, 0), LogicalType::DECIMAL(38, 0));
+	                                         SparkSumDecimalOperation<RESULT_TYPE>>(LogicalType::DECIMAL(38, 0),
+	                                                                                LogicalType::DECIMAL(38, 0));
 }
 
 // Helper: look up the SparkSumDecimal function for a given physical type
@@ -135,7 +135,7 @@ static AggregateFunction GetSparkSumByPhysicalType(PhysicalType pt) {
 }
 
 static unique_ptr<FunctionData> BindSparkSumDecimal(ClientContext &context, AggregateFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto &type = arguments[0]->return_type;
 	if (type.id() != LogicalTypeId::DECIMAL) {
 		throw InvalidInputException("spark_sum DECIMAL overload requires DECIMAL argument");
@@ -279,8 +279,8 @@ struct SparkAvgDecimalOperation {
 		}
 
 		auto &bind_data = finalize_data.input.bind_data->Cast<SparkAggBindData>();
-		uint32_t scale_adj = static_cast<uint32_t>(bind_data.result_scale) -
-		                     static_cast<uint32_t>(bind_data.input_scale);
+		uint32_t scale_adj =
+		    static_cast<uint32_t>(bind_data.result_scale) - static_cast<uint32_t>(bind_data.input_scale);
 
 		__int128 count_val = static_cast<__int128>(state.count);
 		unsigned __int128 pow10_val = (scale_adj > 0) ? Pow10_128(scale_adj) : 0;
@@ -298,8 +298,8 @@ struct SparkAvgDecimalOperation {
 template <typename RESULT_TYPE>
 static AggregateFunction GetSparkAvgDecimalFunction() {
 	return AggregateFunction::UnaryAggregate<SparkAvgDecimalState, hugeint_t, RESULT_TYPE,
-	                                          SparkAvgDecimalOperation<RESULT_TYPE>>(
-	    LogicalType::DECIMAL(38, 0), LogicalType::DECIMAL(38, 0));
+	                                         SparkAvgDecimalOperation<RESULT_TYPE>>(LogicalType::DECIMAL(38, 0),
+	                                                                                LogicalType::DECIMAL(38, 0));
 }
 
 // Helper: look up the SparkAvgDecimal function for a given physical type
@@ -319,7 +319,7 @@ static AggregateFunction GetSparkAvgByPhysicalType(PhysicalType pt) {
 }
 
 static unique_ptr<FunctionData> BindSparkAvgDecimal(ClientContext &context, AggregateFunction &function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto &type = arguments[0]->return_type;
 	if (type.id() != LogicalTypeId::DECIMAL) {
 		throw InvalidInputException("spark_avg DECIMAL overload requires DECIMAL argument");
@@ -365,30 +365,29 @@ inline AggregateFunctionSet CreateSparkSumFunctionSet() {
 
 	// Integer overloads: all return BIGINT (Spark semantics)
 	// TINYINT
-	auto tinyint_func = AggregateFunction::UnaryAggregate<SparkSumIntegerState, int8_t, int64_t,
-	                                                       SparkSumIntegerOperation>(
-	    LogicalType::TINYINT, LogicalType::BIGINT);
+	auto tinyint_func =
+	    AggregateFunction::UnaryAggregate<SparkSumIntegerState, int8_t, int64_t, SparkSumIntegerOperation>(
+	        LogicalType::TINYINT, LogicalType::BIGINT);
 	tinyint_func.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	set.AddFunction(tinyint_func);
 
 	// SMALLINT
-	auto smallint_func = AggregateFunction::UnaryAggregate<SparkSumIntegerState, int16_t, int64_t,
-	                                                        SparkSumIntegerOperation>(
-	    LogicalType::SMALLINT, LogicalType::BIGINT);
+	auto smallint_func =
+	    AggregateFunction::UnaryAggregate<SparkSumIntegerState, int16_t, int64_t, SparkSumIntegerOperation>(
+	        LogicalType::SMALLINT, LogicalType::BIGINT);
 	smallint_func.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	set.AddFunction(smallint_func);
 
 	// INTEGER
-	auto int_func = AggregateFunction::UnaryAggregate<SparkSumIntegerState, int32_t, int64_t,
-	                                                   SparkSumIntegerOperation>(
+	auto int_func = AggregateFunction::UnaryAggregate<SparkSumIntegerState, int32_t, int64_t, SparkSumIntegerOperation>(
 	    LogicalType::INTEGER, LogicalType::BIGINT);
 	int_func.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	set.AddFunction(int_func);
 
 	// BIGINT
-	auto bigint_func = AggregateFunction::UnaryAggregate<SparkSumIntegerState, int64_t, int64_t,
-	                                                      SparkSumIntegerOperation>(
-	    LogicalType::BIGINT, LogicalType::BIGINT);
+	auto bigint_func =
+	    AggregateFunction::UnaryAggregate<SparkSumIntegerState, int64_t, int64_t, SparkSumIntegerOperation>(
+	        LogicalType::BIGINT, LogicalType::BIGINT);
 	bigint_func.order_dependent = AggregateOrderDependent::NOT_ORDER_DEPENDENT;
 	set.AddFunction(bigint_func);
 
@@ -486,8 +485,8 @@ struct SparkSkewnessOperation {
 		}
 		// Population skewness: mu_3 / mu_2^(3/2)
 		// mu_3 = (1/n) * (sum_cub - 3*sum_sqr*sum/n + 2*sum^3/n^2)
-		double mu3 = temp * (state.sum_cub - 3 * state.sum_sqr * state.sum * temp +
-		                     2 * pow(state.sum, 3) * temp * temp);
+		double mu3 =
+		    temp * (state.sum_cub - 3 * state.sum_sqr * state.sum * temp + 2 * pow(state.sum, 3) * temp * temp);
 		target = mu3 / div;
 		if (!Value::DoubleIsFinite(target)) {
 			throw OutOfRangeException("SKEW is out of range!");

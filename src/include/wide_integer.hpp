@@ -71,8 +71,7 @@ inline uint256_t Mul128(unsigned __int128 a, unsigned __int128 b) {
 // Uses Knuth's Algorithm D with 64-bit "digits" for the main path,
 // replacing the 128-iteration bit-by-bit binary long division.
 // Special fast paths for num.hi == 0 and den < 2^64.
-inline unsigned __int128 Div256By128(uint256_t num, unsigned __int128 den,
-                                     unsigned __int128 *remainder) {
+inline unsigned __int128 Div256By128(uint256_t num, unsigned __int128 den, unsigned __int128 *remainder) {
 	// Fast path: high part is zero -> simple 128-bit division
 	if (num.hi == 0) {
 		unsigned __int128 quot = num.lo / den;
@@ -140,8 +139,7 @@ inline unsigned __int128 Div256By128(uint256_t num, unsigned __int128 den,
 	uint64_t rhat = static_cast<uint64_t>(tmp % d1);
 
 	// Refine: while qhat * d0 > [rhat, n1]
-	while (static_cast<unsigned __int128>(qhat) * d0 >
-	       ((static_cast<unsigned __int128>(rhat) << 64) | n1)) {
+	while (static_cast<unsigned __int128>(qhat) * d0 > ((static_cast<unsigned __int128>(rhat) << 64) | n1)) {
 		qhat--;
 		rhat += d1;
 		if (rhat < d1) {
@@ -171,8 +169,7 @@ inline unsigned __int128 Div256By128(uint256_t num, unsigned __int128 den,
 	qhat = static_cast<uint64_t>(tmp / d1);
 	rhat = static_cast<uint64_t>(tmp % d1);
 
-	while (static_cast<unsigned __int128>(qhat) * d0 >
-	       ((static_cast<unsigned __int128>(rhat) << 64) | n0)) {
+	while (static_cast<unsigned __int128>(qhat) * d0 > ((static_cast<unsigned __int128>(rhat) << 64) | n0)) {
 		qhat--;
 		rhat += d1;
 		if (rhat < d1) {

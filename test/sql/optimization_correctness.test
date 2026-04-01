@@ -1,6 +1,6 @@
 # name: test/sql/optimization_correctness.test
 # description: Tests verifying correctness of optimization code paths (P1-P9)
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

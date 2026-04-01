@@ -1,6 +1,6 @@
 # name: test/sql/wide_arithmetic.test
 # description: Tests exercising the 256-bit slow path in SparkDecimalDivide
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

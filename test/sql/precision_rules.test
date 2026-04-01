@@ -1,6 +1,6 @@
 # name: test/sql/precision_rules.test
 # description: Verify Spark 4.1 decimal division type rules
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

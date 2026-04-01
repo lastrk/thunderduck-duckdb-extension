@@ -1,6 +1,6 @@
 # name: test/sql/table_operations.test
 # description: Tests with table data and vector processing
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

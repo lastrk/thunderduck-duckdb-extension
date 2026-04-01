@@ -54,9 +54,7 @@ static void SparkDivExec(DataChunk &args, ExpressionState &state, Vector &result
 	auto &a_vec = args.data[0];
 	auto &b_vec = args.data[1];
 
-	if (a_vec.GetVectorType() == VectorType::FLAT_VECTOR &&
-	    b_vec.GetVectorType() == VectorType::FLAT_VECTOR) {
-
+	if (a_vec.GetVectorType() == VectorType::FLAT_VECTOR && b_vec.GetVectorType() == VectorType::FLAT_VECTOR) {
 		auto *__restrict a_data = FlatVector::GetData<hugeint_t>(a_vec);
 		auto *__restrict b_data = FlatVector::GetData<hugeint_t>(b_vec);
 		auto &a_validity = FlatVector::Validity(a_vec);
@@ -149,9 +147,8 @@ static LogicalType PromoteIntToDecimal(const LogicalType &type) {
 	}
 }
 
-static unique_ptr<FunctionData> BindSparkDecimalDiv(ClientContext &context,
-                                                     ScalarFunction &bound_function,
-                                                     vector<unique_ptr<Expression>> &arguments) {
+static unique_ptr<FunctionData> BindSparkDecimalDiv(ClientContext &context, ScalarFunction &bound_function,
+                                                    vector<unique_ptr<Expression>> &arguments) {
 	auto type_a = arguments[0]->return_type;
 	auto type_b = arguments[1]->return_type;
 
@@ -173,8 +170,8 @@ static unique_ptr<FunctionData> BindSparkDecimalDiv(ClientContext &context,
 	}
 
 	if (type_a.id() != LogicalTypeId::DECIMAL || type_b.id() != LogicalTypeId::DECIMAL) {
-		throw InvalidInputException("spark_decimal_div requires DECIMAL arguments, got %s and %s",
-		                            type_a.ToString(), type_b.ToString());
+		throw InvalidInputException("spark_decimal_div requires DECIMAL arguments, got %s and %s", type_a.ToString(),
+		                            type_b.ToString());
 	}
 
 	uint8_t p1 = DecimalType::GetWidth(type_a);
@@ -262,7 +259,6 @@ DUCKDB_CPP_EXTENSION_ENTRY(thdck_spark_funcs, loader) {
 DUCKDB_EXTENSION_API const char *thdck_spark_funcs_version() {
 	return duckdb::DuckDB::LibraryVersion();
 }
-
 }
 
 #ifndef DUCKDB_EXTENSION_MAIN

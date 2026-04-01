@@ -1,6 +1,6 @@
 # name: test/sql/rounding.test
 # description: Verify ROUND_HALF_UP rounding behavior
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

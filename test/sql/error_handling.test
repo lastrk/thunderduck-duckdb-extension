@@ -1,6 +1,6 @@
 # name: test/sql/error_handling.test
 # description: Error handling for invalid inputs
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 

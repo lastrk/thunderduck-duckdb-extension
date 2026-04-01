@@ -88,28 +88,27 @@ static void SparkSchemaOfJsonExec(DataChunk &args, ExpressionState &state, Vecto
 	auto &input = args.data[0];
 	idx_t count = args.size();
 
-	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(
-	    input, result, count, [&](string_t input_str, ValidityMask &mask, idx_t idx) {
-		    const char *json_cstr = input_str.GetData();
-		    idx_t json_len = input_str.GetSize();
+	UnaryExecutor::ExecuteWithNulls<string_t, string_t>(input, result, count,
+	                                                    [&](string_t input_str, ValidityMask &mask, idx_t idx) {
+		                                                    const char *json_cstr = input_str.GetData();
+		                                                    idx_t json_len = input_str.GetSize();
 
-		    yyjson_doc *doc = yyjson_read(json_cstr, json_len, 0);
-		    if (!doc) {
-			    mask.SetInvalid(idx);
-			    return string_t();
-		    }
+		                                                    yyjson_doc *doc = yyjson_read(json_cstr, json_len, 0);
+		                                                    if (!doc) {
+			                                                    mask.SetInvalid(idx);
+			                                                    return string_t();
+		                                                    }
 
-		    yyjson_val *root = yyjson_doc_get_root(doc);
-		    std::string ddl = InferSparkType(root);
-		    yyjson_doc_free(doc);
+		                                                    yyjson_val *root = yyjson_doc_get_root(doc);
+		                                                    std::string ddl = InferSparkType(root);
+		                                                    yyjson_doc_free(doc);
 
-		    return StringVector::AddString(result, ddl);
-	    });
+		                                                    return StringVector::AddString(result, ddl);
+	                                                    });
 }
 
 inline ScalarFunction CreateSparkSchemaOfJsonFunction() {
-	ScalarFunction func("spark_schema_of_json", {LogicalType::VARCHAR}, LogicalType::VARCHAR,
-	                    SparkSchemaOfJsonExec);
+	ScalarFunction func("spark_schema_of_json", {LogicalType::VARCHAR}, LogicalType::VARCHAR, SparkSchemaOfJsonExec);
 	func.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
 	return func;
 }
