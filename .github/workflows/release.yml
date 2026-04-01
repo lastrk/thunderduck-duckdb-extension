@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'duckdb*+ext*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to release (e.g., duckdb1.4.4+ext1)'
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build extension binaries
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4.4
+    with:
+      duckdb_version: v1.4.4
+      ci_tools_version: v1.4.4
+      extension_name: thdck_spark_funcs
+      exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
+
+  release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          for dir in artifacts/thdck_spark_funcs-*; do
+            arch=$(echo "$dir" | sed 's/.*extension-//')
+            cp "$dir"/thdck_spark_funcs.duckdb_extension \
+               "release-assets/thdck_spark_funcs-${arch}.duckdb_extension"
+          done
+          ls -la release-assets/
+
+      - name: Determine tag
+        id: tag
+        run: |
+          TAG="${GITHUB_REF_NAME:-${{ github.event.inputs.tag }}}"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.tag.outputs.tag }}"
+          DUCKDB_VERSION=$(echo "$TAG" | sed 's/duckdb\(.*\)+ext.*/v\1/')
+          gh release create "$TAG" release-assets/* \
+            --title "$TAG" \
+            --notes "Extension binaries for DuckDB ${DUCKDB_VERSION}
+
+          Platforms: linux_amd64, linux_arm64, osx_amd64, osx_arm64
+
+          ## Usage
+          \`\`\`bash
+          gh release download ${TAG} --pattern '*osx_arm64*' --repo lastrk/thunderduck-duckdb-extension
+          \`\`\`"
