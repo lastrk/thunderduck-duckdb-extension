@@ -55,18 +55,19 @@ inline void WriteAggResult<hugeint_t>(hugeint_t &target, __int128 val) {
 // ============================================================================
 
 struct SparkSumDecimalState {
-	__int128 value;
+	hugeint_t value;
 	bool isset;
 
 	void Initialize() {
 		isset = false;
-		value = 0;
+		value = hugeint_t(0, 0);
 	}
 
 	void Combine(const SparkSumDecimalState &other) {
 		if (other.isset) {
 			isset = true;
-			value += other.value;
+			__int128 result = HugeintToInt128(value) + HugeintToInt128(other.value);
+			value = Int128ToHugeint(result);
 		}
 	}
 };
@@ -82,13 +83,15 @@ struct SparkSumDecimalOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		state.isset = true;
-		state.value += HugeintToInt128(input);
+		__int128 result = HugeintToInt128(state.value) + HugeintToInt128(input);
+		state.value = Int128ToHugeint(result);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
 		state.isset = true;
-		state.value += HugeintToInt128(input) * static_cast<__int128>(count);
+		__int128 result = HugeintToInt128(state.value) + HugeintToInt128(input) * static_cast<__int128>(count);
+		state.value = Int128ToHugeint(result);
 	}
 
 	template <class STATE, class OP>
@@ -101,7 +104,7 @@ struct SparkSumDecimalOperation {
 		if (!state.isset) {
 			finalize_data.ReturnNull();
 		} else {
-			WriteAggResult(target, state.value);
+			WriteAggResult(target, HugeintToInt128(state.value));
 		}
 	}
 
@@ -232,17 +235,18 @@ struct SparkSumIntegerOperation {
 // ============================================================================
 
 struct SparkAvgDecimalState {
-	__int128 sum;
+	hugeint_t sum;
 	uint64_t count;
 
 	void Initialize() {
 		count = 0;
-		sum = 0;
+		sum = hugeint_t(0, 0);
 	}
 
 	void Combine(const SparkAvgDecimalState &other) {
 		count += other.count;
-		sum += other.sum;
+		__int128 result = HugeintToInt128(sum) + HugeintToInt128(other.sum);
+		sum = Int128ToHugeint(result);
 	}
 };
 
@@ -257,13 +261,15 @@ struct SparkAvgDecimalOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		state.count++;
-		state.sum += HugeintToInt128(input);
+		__int128 result = HugeintToInt128(state.sum) + HugeintToInt128(input);
+		state.sum = Int128ToHugeint(result);
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
 		state.count += count;
-		state.sum += HugeintToInt128(input) * static_cast<__int128>(count);
+		__int128 result = HugeintToInt128(state.sum) + HugeintToInt128(input) * static_cast<__int128>(count);
+		state.sum = Int128ToHugeint(result);
 	}
 
 	template <class STATE, class OP>
@@ -282,9 +288,10 @@ struct SparkAvgDecimalOperation {
 		uint32_t scale_adj =
 		    static_cast<uint32_t>(bind_data.result_scale) - static_cast<uint32_t>(bind_data.input_scale);
 
+		__int128 sum_val = HugeintToInt128(state.sum);
 		__int128 count_val = static_cast<__int128>(state.count);
 		unsigned __int128 pow10_val = (scale_adj > 0) ? Pow10_128(scale_adj) : 0;
-		__int128 result = SparkDecimalDivide(state.sum, count_val, pow10_val);
+		__int128 result = SparkDecimalDivide(sum_val, count_val, pow10_val);
 
 		WriteAggResult(target, result);
 	}
