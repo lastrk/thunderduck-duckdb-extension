@@ -1,6 +1,6 @@
 # name: test/sql/window_aggregates.test
 # description: Test spark_sum and spark_avg as window functions with OVER clause
-# group: [thdck_spark_funcs]
+# group: [sql]
 
 require thdck_spark_funcs
 
