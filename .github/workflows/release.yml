@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - 'duckdb*+ext*'
+      - 'duckdb*-ext*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., duckdb1.4.4+ext1)'
+        description: 'Tag to release (e.g., duckdb1.4.4-ext1)'
         required: true
 
 concurrency:
@@ -58,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          DUCKDB_VERSION=$(echo "$TAG" | sed 's/duckdb\(.*\)+ext.*/v\1/')
+          DUCKDB_VERSION=$(echo "$TAG" | sed 's/duckdb\(.*\)-ext.*/v\1/')
           gh release create "$TAG" release-assets/* \
             --title "$TAG" \
             --notes "Extension binaries for DuckDB ${DUCKDB_VERSION}
