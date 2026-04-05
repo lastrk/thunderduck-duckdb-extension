@@ -419,28 +419,31 @@ inline AggregateFunctionSet CreateSparkAvgFunctionSet() {
 // ============================================================================
 // spark_skewness: Population skewness (matches Spark's skewness())
 //
-// Spark computes population skewness: mu_3 / mu_2^(3/2)
-// DuckDB's built-in skewness() applies sample bias correction: sqrt(n*(n-1))/(n-2)
-// This implementation computes population skewness directly, without correction.
+// Uses Pebay's numerically stable online algorithm (Sandia 2008) with
+// state (n, mean, m2, m3) where m2/m3 are central moment sums.
 //
-// Edge case differences from DuckDB built-in:
-//   - Returns NULL for n <= 1 (DuckDB returns NULL for n <= 2)
-//   - Returns NULL for zero variance (DuckDB returns NaN)
+// Formula: spark_skewness = sqrt(n) * m3 / m2^(3/2)
+//
+// Edge cases (matching Spark):
+//   - n < 2:        NULL
+//   - m2 == 0:      NULL (zero variance, all values equal)
+//   - otherwise:    computed value
 // ============================================================================
 
-// Reuse same state layout as DuckDB's SkewState
 struct SparkSkewState {
-	size_t n;
-	double sum;
-	double sum_sqr;
-	double sum_cub;
+	uint64_t n;
+	double mean;
+	double m2;
+	double m3;
 };
 
 struct SparkSkewnessOperation {
 	template <class STATE>
 	static void Initialize(STATE &state) {
 		state.n = 0;
-		state.sum = state.sum_sqr = state.sum_cub = 0;
+		state.mean = 0;
+		state.m2 = 0;
+		state.m3 = 0;
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
@@ -451,50 +454,64 @@ struct SparkSkewnessOperation {
 		}
 	}
 
+	// Pebay online update: add a single value x
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &unary_input) {
+		double x = static_cast<double>(input);
+		uint64_t n1 = state.n;
 		state.n++;
-		state.sum += input;
-		state.sum_sqr += pow(input, 2);
-		state.sum_cub += pow(input, 3);
+		double n_new = static_cast<double>(state.n);
+		double delta = x - state.mean;
+		double delta_n = delta / n_new;
+		double delta_n2 = delta_n * delta_n;
+		double term1 = delta * delta_n * static_cast<double>(n1);
+		state.m3 += term1 * delta_n * (n_new - 2.0) - 3.0 * delta_n * state.m2;
+		state.m2 += term1;
+		state.mean += delta_n;
 	}
 
+	// Pebay parallel merge: combine two partial aggregates
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		if (source.n == 0) {
 			return;
 		}
+		if (target.n == 0) {
+			target.n = source.n;
+			target.mean = source.mean;
+			target.m2 = source.m2;
+			target.m3 = source.m3;
+			return;
+		}
+		double nA = static_cast<double>(target.n);
+		double nB = static_cast<double>(source.n);
+		double n_combined = nA + nB;
+		double delta = source.mean - target.mean;
+		double delta2 = delta * delta;
+		double delta3 = delta2 * delta;
+		double nA_nB = nA * nB;
+
+		double new_m3 = target.m3 + source.m3 + delta3 * nA_nB * (nA - nB) / (n_combined * n_combined) +
+		                3.0 * delta * (nA * source.m2 - nB * target.m2) / n_combined;
+		double new_m2 = target.m2 + source.m2 + delta2 * nA_nB / n_combined;
+		double new_mean = (nA * target.mean + nB * source.mean) / n_combined;
+
 		target.n += source.n;
-		target.sum += source.sum;
-		target.sum_sqr += source.sum_sqr;
-		target.sum_cub += source.sum_cub;
+		target.mean = new_mean;
+		target.m2 = new_m2;
+		target.m3 = new_m3;
 	}
 
 	template <class TARGET_TYPE, class STATE>
 	static void Finalize(STATE &state, TARGET_TYPE &target, AggregateFinalizeData &finalize_data) {
-		// Spark returns NULL for n <= 1
-		if (state.n <= 1) {
+		if (state.n < 2 || state.m2 == 0.0) {
 			finalize_data.ReturnNull();
 			return;
 		}
-		double n = state.n;
-		double temp = 1.0 / n;
-		// variance = (1/n) * (sum_sqr - sum^2 / n)
-		double variance = temp * (state.sum_sqr - state.sum * state.sum * temp);
-		if (variance < 0) {
-			variance = 0; // Floating point guard
-		}
-		double div = std::pow(variance, 1.5); // stddev^3 = variance^(3/2)
-		if (div == 0) {
-			// Spark returns NULL for zero variance (not NaN like DuckDB)
-			finalize_data.ReturnNull();
-			return;
-		}
-		// Population skewness: mu_3 / mu_2^(3/2)
-		// mu_3 = (1/n) * (sum_cub - 3*sum_sqr*sum/n + 2*sum^3/n^2)
-		double mu3 =
-		    temp * (state.sum_cub - 3 * state.sum_sqr * state.sum * temp + 2 * pow(state.sum, 3) * temp * temp);
-		target = mu3 / div;
+		// spark_skewness = sqrt(n) * m3 / m2^(3/2)
+		double n = static_cast<double>(state.n);
+		double m2_pow = std::pow(state.m2, 1.5);
+		target = std::sqrt(n) * state.m3 / m2_pow;
 		if (!Value::DoubleIsFinite(target)) {
 			throw OutOfRangeException("SKEW is out of range!");
 		}

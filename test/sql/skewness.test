@@ -1,0 +1,124 @@
+# name: test/sql/skewness.test
+# description: Test spark_skewness population skewness (Pebay online algorithm)
+# group: [sql]
+
+require thdck_spark_funcs
+
+# ============================================================================
+# Concrete test vector from spec
+# ============================================================================
+
+query I
+SELECT round(spark_skewness(x::DOUBLE), 15)
+FROM (VALUES (10),(20),(30),(40),(50),(60),(70),(80),(90),(100),(15),(25),(55),(75),(95)) t(x);
+----
+0.017475922407013
+
+# Verify spark vs DuckDB relationship: duckdb = sqrt(n*(n-1))/(n-2) * spark
+query I
+SELECT round(
+  skewness(x::DOUBLE) * (15.0 - 2.0) / sqrt(15.0 * 14.0)
+  - spark_skewness(x::DOUBLE), 10)
+FROM (VALUES (10),(20),(30),(40),(50),(60),(70),(80),(90),(100),(15),(25),(55),(75),(95)) t(x);
+----
+0.0
+
+# ============================================================================
+# Edge cases (must match Spark)
+# ============================================================================
+
+# n = 0 (empty): NULL
+query I
+SELECT spark_skewness(x::DOUBLE) FROM (SELECT 1 WHERE false) t(x);
+----
+NULL
+
+# n = 1: NULL
+query I
+SELECT spark_skewness(x::DOUBLE) FROM (VALUES (42)) t(x);
+----
+NULL
+
+# n >= 2, all values equal (m2 = 0): NULL
+query I
+SELECT spark_skewness(x::DOUBLE) FROM (VALUES (5),(5),(5),(5)) t(x);
+----
+NULL
+
+# n = 2, distinct values: 0.0 (symmetric)
+query I
+SELECT spark_skewness(x::DOUBLE) FROM (VALUES (1),(2)) t(x);
+----
+0.0
+
+# NULLs are ignored
+query I
+SELECT round(spark_skewness(x::DOUBLE), 15)
+FROM (VALUES (10),(NULL),(20),(30),(NULL),(40),(50),(60),(70),(80),(90),(100),(15),(25),(55),(75),(95)) t(x);
+----
+0.017475922407013
+
+# ============================================================================
+# Known distributions
+# ============================================================================
+
+# Right-skewed: positive skewness
+query I
+SELECT spark_skewness(x::DOUBLE) > 0
+FROM (VALUES (1),(1),(1),(1),(2),(2),(3),(10)) t(x);
+----
+true
+
+# Left-skewed: negative skewness
+query I
+SELECT spark_skewness(x::DOUBLE) < 0
+FROM (VALUES (1),(8),(9),(9),(9),(10),(10),(10)) t(x);
+----
+true
+
+# Symmetric: zero skewness
+query I
+SELECT round(spark_skewness(x::DOUBLE), 10)
+FROM (VALUES (1),(2),(3),(4),(5),(6),(7),(8),(9),(10)) t(x);
+----
+0.0
+
+# ============================================================================
+# GROUP BY (exercises Combine path)
+# ============================================================================
+
+statement ok
+CREATE TABLE skew_data (grp TEXT, val DOUBLE);
+
+statement ok
+INSERT INTO skew_data VALUES
+  ('A', 10), ('A', 20), ('A', 30), ('A', 40), ('A', 50),
+  ('B', 1), ('B', 1), ('B', 1), ('B', 1), ('B', 10);
+
+query II
+SELECT grp, round(spark_skewness(val), 10) FROM skew_data GROUP BY grp ORDER BY grp;
+----
+A	0.0
+B	1.5
+
+# ============================================================================
+# UNION ALL CTE (exercises CompressedMaterialization + Combine)
+# ============================================================================
+
+statement ok
+CREATE TABLE skew_t1 AS SELECT (i * 1.0)::DOUBLE as val FROM range(1, 101) t(i);
+
+statement ok
+CREATE TABLE skew_t2 AS SELECT (i * 2.0)::DOUBLE as val FROM range(1, 51) t(i);
+
+query I
+SELECT count(*) FROM (
+  WITH cte AS (
+    SELECT spark_skewness(val) AS sk FROM skew_t1
+    UNION ALL
+    SELECT spark_skewness(val) AS sk FROM skew_t2
+  )
+  SELECT * FROM cte WHERE sk IS NOT NULL
+) t;
+----
+2
