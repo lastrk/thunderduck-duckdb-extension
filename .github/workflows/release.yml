@@ -3,11 +3,11 @@ name: Release
 on:
   push:
     tags:
-      - 'duckdb*-ext*'
+      - 'ext*'
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Tag to release (e.g., duckdb1.5.1-ext1)'
+        description: 'Tag to release (e.g., ext4)'
         required: true
 
 concurrency:
@@ -15,18 +15,37 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  build:
-    name: Build extension binaries
-    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5.1
+  build-v1_4_4:
+    name: Build (DuckDB v1.4.4)
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.4.4
+    with:
+      duckdb_version: v1.4.4
+      ci_tools_version: v1.4.4
+      extension_name: thdck_spark_funcs
+      exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
+
+  build-v1_5_0:
+    name: Build (DuckDB v1.5.0)
+    uses: duckdb/extension-ci-tools/.github/workflows/_extension_distribution.yml@v1.5.0
+    with:
+      duckdb_version: v1.5.0
+      ci_tools_version: v1.5.0
+      extension_name: thdck_spark_funcs
+      exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
+
+  build-v1_5_1:
+    name: Build (DuckDB v1.5.1)
+    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@fix-epel8
     with:
       duckdb_version: v1.5.1
-      ci_tools_version: v1.5.1
+      ci_tools_version: fix-epel8
+      override_ci_tools_repository: lastrk/extension-ci-tools
       extension_name: thdck_spark_funcs
       exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
 
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build-v1_4_4, build-v1_5_0, build-v1_5_1]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -41,9 +60,11 @@ jobs:
         run: |
           mkdir -p release-assets
           for dir in artifacts/thdck_spark_funcs-*; do
-            arch=$(echo "$dir" | sed 's/.*extension-//')
+            basename=$(basename "$dir")
+            version=$(echo "$basename" | sed 's/thdck_spark_funcs-\(v[0-9.]*\)-extension-.*/\1/')
+            arch=$(echo "$basename" | sed 's/thdck_spark_funcs-v[0-9.]*-extension-//')
             cp "$dir"/thdck_spark_funcs.duckdb_extension \
-               "release-assets/thdck_spark_funcs-${arch}.duckdb_extension"
+               "release-assets/thdck_spark_funcs-${version}-${arch}.duckdb_extension"
           done
           ls -la release-assets/
 
@@ -58,14 +79,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="${{ steps.tag.outputs.tag }}"
-          DUCKDB_VERSION=$(echo "$TAG" | sed 's/duckdb\(.*\)-ext.*/v\1/')
           gh release create "$TAG" release-assets/* \
             --title "$TAG" \
-            --notes "Extension binaries for DuckDB ${DUCKDB_VERSION}
+            --notes "Extension binaries for DuckDB v1.4.4, v1.5.0, and v1.5.1
 
           Platforms: linux_amd64, linux_arm64, osx_amd64, osx_arm64
 
           ## Usage
           \`\`\`bash
-          gh release download ${TAG} --pattern '*osx_arm64*' --repo lastrk/thunderduck-duckdb-extension
+          # Download all binaries for a specific DuckDB version and platform
+          gh release download ${TAG} --pattern '*v1.5.1*osx_arm64*' --repo lastrk/thunderduck-duckdb-extension
+
+          # Download all binaries for a DuckDB version
+          gh release download ${TAG} --pattern '*v1.5.1*' --repo lastrk/thunderduck-duckdb-extension
           \`\`\`"
