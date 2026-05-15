@@ -8,33 +8,52 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.head_ref || '' }}-${{ github.base_ref || '' }}-${{ github.ref != 'refs/heads/main' && github.sha || '' }}
   cancel-in-progress: true
 
+# bebb406d = lastrk/extension-ci-tools fix-epel8 tip at 2026-05-13. Single
+# commit on top of duckdb/extension-ci-tools v1.5.1 that disables EPEL 8 in
+# the manylinux_2_28 Dockerfiles. Pinned to the SHA (not the branch name) so
+# a force-push on the personal fork can't silently change what we run.
+# Tracked upstream as duckdb/extension-ci-tools#374 / PR #375 — when that
+# lands and gets backported to v1.5.x, swap the eight pins below back to
+# v1.5.1 (or whatever the closest tag is at the time) and drop
+# override_ci_tools_repository.
+
 jobs:
   build-v1_4_4:
     name: Build (DuckDB v1.4.4)
-    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@fix-epel8
+    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
     with:
       duckdb_version: v1.4.4
-      ci_tools_version: fix-epel8
+      ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
       override_ci_tools_repository: lastrk/extension-ci-tools
       extension_name: thdck_spark_funcs
       exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
 
   build-v1_5_0:
     name: Build (DuckDB v1.5.0)
-    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@fix-epel8
+    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
     with:
       duckdb_version: v1.5.0
-      ci_tools_version: fix-epel8
+      ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
       override_ci_tools_repository: lastrk/extension-ci-tools
       extension_name: thdck_spark_funcs
       exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
 
   build-v1_5_1:
     name: Build (DuckDB v1.5.1)
-    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@fix-epel8
+    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
     with:
       duckdb_version: v1.5.1
-      ci_tools_version: fix-epel8
+      ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
+      override_ci_tools_repository: lastrk/extension-ci-tools
+      extension_name: thdck_spark_funcs
+      exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
+
+  build-v1_5_2:
+    name: Build (DuckDB v1.5.2)
+    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
+    with:
+      duckdb_version: v1.5.2
+      ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
       override_ci_tools_repository: lastrk/extension-ci-tools
       extension_name: thdck_spark_funcs
       exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
