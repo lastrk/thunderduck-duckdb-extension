@@ -106,15 +106,20 @@ struct SparkTrySumDecimalBindData : public FunctionData {
 struct SparkTrySumDecimalState {
 	__int128 value;
 	bool isset;
+	bool overflow;
 
 	void Initialize() {
 		value = 0;
 		isset = false;
+		overflow = false;
 	}
 	void Combine(const SparkTrySumDecimalState &other) {
-		if (other.isset) {
-			isset = true;
-			value += other.value;
+		if (!other.isset) {
+			return;
+		}
+		isset = true;
+		if (overflow || other.overflow || __builtin_add_overflow(value, other.value, &value)) {
+			overflow = true;
 		}
 	}
 };
