@@ -8,7 +8,7 @@ inputs; **no extension function written.**
 - **Oracle:** Apache Spark 4.1.1 via `test/spark_oracle/verify_first.spark.sql`
   vs DuckDB `test/spark_oracle/verify_first.duckdb.sql`.
 - **Parity evidence:** regr_slope=0.9166666667 (Spark==DuckDB). REGR_SLOPE present in DuckDB.
-- **Regression guard:** `test/sql/native_spark_regr_slope_parity.test` (asserts the native
+- **Regression guard:** `test/sql/native_regr_slope_parity.test` (asserts the native
   function equals the captured Spark 4.1.1 golden; runs in `make test` on the
   pinned DuckDB v1.5.0).
 
