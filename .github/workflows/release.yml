@@ -32,41 +32,21 @@ concurrency:
 # the closest tag is at the time) and drop override_ci_tools_repository.
 
 jobs:
-  build-v1_4_4:
-    name: Build (DuckDB v1.4.4)
+  build-v1_5_3:
+    name: Build (DuckDB v1.5.3)
     uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
     with:
-      duckdb_version: v1.4.4
+      duckdb_version: v1.5.3
       ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
       override_ci_tools_repository: lastrk/extension-ci-tools
       extension_name: thdck_spark_funcs
       exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
 
-  build-v1_5_0:
-    name: Build (DuckDB v1.5.0)
+  build-v1_5_4:
+    name: Build (DuckDB v1.5.4)
     uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
     with:
-      duckdb_version: v1.5.0
-      ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
-      override_ci_tools_repository: lastrk/extension-ci-tools
-      extension_name: thdck_spark_funcs
-      exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
-
-  build-v1_5_1:
-    name: Build (DuckDB v1.5.1)
-    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
-    with:
-      duckdb_version: v1.5.1
-      ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
-      override_ci_tools_repository: lastrk/extension-ci-tools
-      extension_name: thdck_spark_funcs
-      exclude_archs: 'linux_amd64_musl;windows_amd64;windows_arm64;windows_amd64_mingw;wasm_mvp;wasm_eh;wasm_threads'
-
-  build-v1_5_2:
-    name: Build (DuckDB v1.5.2)
-    uses: lastrk/extension-ci-tools/.github/workflows/_extension_distribution.yml@bebb406d50413c4f4a55a44d9316a69b9d1a0018
-    with:
-      duckdb_version: v1.5.2
+      duckdb_version: v1.5.4
       ci_tools_version: bebb406d50413c4f4a55a44d9316a69b9d1a0018
       override_ci_tools_repository: lastrk/extension-ci-tools
       extension_name: thdck_spark_funcs
@@ -74,7 +54,7 @@ jobs:
 
   release:
     name: Create GitHub Release
-    needs: [build-v1_4_4, build-v1_5_0, build-v1_5_1, build-v1_5_2]
+    needs: [build-v1_5_3, build-v1_5_4]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -110,15 +90,15 @@ jobs:
           TAG="${{ steps.tag.outputs.tag }}"
           gh release create "$TAG" release-assets/* \
             --title "$TAG" \
-            --notes "Extension binaries for DuckDB v1.4.4, v1.5.0, v1.5.1, and v1.5.2
+            --notes "Extension binaries for DuckDB v1.5.3 and v1.5.4
 
           Platforms: linux_amd64, linux_arm64, osx_amd64, osx_arm64
 
           ## Usage
           \`\`\`bash
           # Download all binaries for a specific DuckDB version and platform
-          gh release download ${TAG} --pattern '*v1.5.2*osx_arm64*' --repo lastrk/thunderduck-duckdb-extension
+          gh release download ${TAG} --pattern '*v1.5.4*osx_arm64*' --repo lastrk/thunderduck-duckdb-extension
 
           # Download all binaries for a DuckDB version
-          gh release download ${TAG} --pattern '*v1.5.2*' --repo lastrk/thunderduck-duckdb-extension
+          gh release download ${TAG} --pattern '*v1.5.4*' --repo lastrk/thunderduck-duckdb-extension
           \`\`\`"
