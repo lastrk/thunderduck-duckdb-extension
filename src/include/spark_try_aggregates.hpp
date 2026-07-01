@@ -163,7 +163,7 @@ struct SparkTrySumDecimalOperation {
 
 	template <class T, class STATE>
 	static void Finalize(STATE &state, T &target, AggregateFinalizeData &finalize_data) {
-		if (!state.isset) {
+		if (!state.isset || state.overflow) {
 			finalize_data.ReturnNull();
 			return;
 		}
