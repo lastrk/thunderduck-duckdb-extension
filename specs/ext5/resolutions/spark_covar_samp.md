@@ -8,7 +8,7 @@ inputs; **no extension function written.**
 - **Oracle:** Apache Spark 4.1.1 via `test/spark_oracle/verify_first.spark.sql`
   vs DuckDB `test/spark_oracle/verify_first.duckdb.sql`.
 - **Parity evidence:** covar_samp=5.5 (Spark==DuckDB). Single-row group -> NULL both.
-- **Regression guard:** `test/sql/native_spark_covar_samp_parity.test` (asserts the native
+- **Regression guard:** `test/sql/native_covar_samp_parity.test` (asserts the native
   function equals the captured Spark 4.1.1 golden; runs in `make test` on the
   pinned DuckDB v1.5.0).
 
