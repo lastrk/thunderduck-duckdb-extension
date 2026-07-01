@@ -4,6 +4,7 @@
 #include "spark_precision.hpp"
 #include "decimal_division.hpp"
 #include "spark_aggregates.hpp"
+#include "spark_try_aggregates.hpp"
 #include "spark_hash.hpp"
 #include "spark_schema_of_json.hpp"
 
@@ -218,6 +219,76 @@ static unique_ptr<FunctionData> BindSparkDecimalDiv(ClientContext &context, Scal
 }
 
 // ---------------------------------------------------------------------------
+// spark_try_divide: Spark 3.5+ try_divide(dividend, divisor)
+//
+// divisor == 0 (or NULL operand) -> NULL. Otherwise divide using Spark's type
+// promotion: any DECIMAL operand -> DECIMAL result (identical to spark_decimal_div,
+// which already returns NULL on zero); all other numeric operands -> DOUBLE.
+// Verified vs Spark 4.1.1: try_divide(10,2)=5.0 (DOUBLE), try_divide(1.5,0.5 dec)
+// = 3.000000 DECIMAL(9,6), try_divide(x,0)=NULL.
+// ---------------------------------------------------------------------------
+
+static void SparkTryDivideDoubleExec(DataChunk &args, ExpressionState &state, Vector &result) {
+	idx_t count = args.size();
+	result.SetVectorType(VectorType::FLAT_VECTOR);
+	auto *__restrict result_data = FlatVector::GetData<double>(result);
+	auto &result_validity = FlatVector::Validity(result);
+
+	UnifiedVectorFormat a_fmt, b_fmt;
+	args.data[0].ToUnifiedFormat(count, a_fmt);
+	args.data[1].ToUnifiedFormat(count, b_fmt);
+	const auto *__restrict a_data = UnifiedVectorFormat::GetData<double>(a_fmt);
+	const auto *__restrict b_data = UnifiedVectorFormat::GetData<double>(b_fmt);
+
+	for (idx_t i = 0; i < count; i++) {
+		auto a_idx = a_fmt.sel->get_index(i);
+		auto b_idx = b_fmt.sel->get_index(i);
+		if (!a_fmt.validity.RowIsValid(a_idx) || !b_fmt.validity.RowIsValid(b_idx)) {
+			result_validity.SetInvalid(i);
+			continue;
+		}
+		double b_val = b_data[b_idx];
+		if (b_val == 0.0) {
+			result_validity.SetInvalid(i); // Spark: divide-by-zero -> NULL
+			continue;
+		}
+		result_data[i] = a_data[a_idx] / b_val;
+	}
+}
+
+static unique_ptr<FunctionData> BindSparkTryDivide(ClientContext &context, ScalarFunction &bound_function,
+                                                   vector<unique_ptr<Expression>> &arguments) {
+	auto type_a = arguments[0]->return_type;
+	auto type_b = arguments[1]->return_type;
+
+	// DECIMAL division only when both sides are DECIMAL or an integral type that can be promoted to DECIMAL.
+	auto is_decimal_or_integral = [](LogicalTypeId id) {
+		switch (id) {
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT:
+			return true;
+		default:
+			return false;
+		}
+	};
+	if ((type_a.id() == LogicalTypeId::DECIMAL || type_b.id() == LogicalTypeId::DECIMAL) &&
+	    is_decimal_or_integral(type_a.id()) && is_decimal_or_integral(type_b.id())) {
+		return BindSparkDecimalDiv(context, bound_function, arguments);
+	}
+
+	// All other numeric operands -> DOUBLE division (Spark: int/int -> double).
+	bound_function.arguments[0] = LogicalType::DOUBLE;
+	bound_function.arguments[1] = LogicalType::DOUBLE;
+	bound_function.return_type = LogicalType::DOUBLE;
+	bound_function.function = SparkTryDivideDoubleExec;
+	return nullptr;
+}
+
+// ---------------------------------------------------------------------------
 // Internal loading logic
 // ---------------------------------------------------------------------------
 
@@ -229,9 +300,18 @@ static void LoadInternal(ExtensionLoader &loader) {
 
 	loader.RegisterFunction(func);
 
+	// spark_try_divide (ext5): divide-by-zero -> NULL, Spark type promotion.
+	vector<LogicalType> try_div_args = {LogicalType::ANY, LogicalType::ANY};
+	ScalarFunction try_div("spark_try_divide", std::move(try_div_args), LogicalType::ANY, SparkTryDivideDoubleExec,
+	                       BindSparkTryDivide);
+	try_div.null_handling = FunctionNullHandling::SPECIAL_HANDLING;
+	loader.RegisterFunction(try_div);
+
 	// Spark-compatible aggregate functions
 	loader.RegisterFunction(CreateSparkSumFunctionSet());
 	loader.RegisterFunction(CreateSparkAvgFunctionSet());
+	loader.RegisterFunction(CreateSparkTrySumFunctionSet()); // ext5
+	loader.RegisterFunction(CreateSparkTryAvgFunctionSet()); // ext5
 	loader.RegisterFunction(CreateSparkSkewnessFunction());
 	loader.RegisterFunction(CreateSparkSchemaOfJsonFunction());
 	// COUNT not needed — DuckDB COUNT already returns BIGINT (matches Spark)

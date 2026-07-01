@@ -3,3 +3,7 @@ build/
 
 # Test temp files
 duckdb_unittest_tempdir/
+
+# Spark oracle byproducts (spark-sql local metastore)
+derby.log
+metastore_db/
