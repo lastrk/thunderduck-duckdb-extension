@@ -129,15 +129,28 @@ struct SparkTrySumDecimalOperation {
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void Operation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &) {
 		state.isset = true;
-		state.value += HugeintToInt128(input);
+		if (state.overflow) {
+			return;
+		}
+		__int128 input_val = HugeintToInt128(input);
+		if (__builtin_add_overflow(state.value, input_val, &state.value)) {
+			state.overflow = true;
+		}
 	}
 
 	template <class INPUT_TYPE, class STATE, class OP>
 	static void ConstantOperation(STATE &state, const INPUT_TYPE &input, AggregateUnaryInput &, idx_t count) {
 		state.isset = true;
-		state.value += HugeintToInt128(input) * static_cast<__int128>(count);
+		if (state.overflow) {
+			return;
+		}
+		__int128 input_val = HugeintToInt128(input);
+		__int128 mul;
+		if (__builtin_mul_overflow(input_val, static_cast<__int128>(count), &mul) ||
+		    __builtin_add_overflow(state.value, mul, &state.value)) {
+			state.overflow = true;
+		}
 	}
-
 	template <class STATE, class OP>
 	static void Combine(const STATE &source, STATE &target, AggregateInputData &) {
 		target.Combine(source);
