@@ -261,10 +261,22 @@ static unique_ptr<FunctionData> BindSparkTryDivide(ClientContext &context, Scala
 	auto type_a = arguments[0]->return_type;
 	auto type_b = arguments[1]->return_type;
 
-	// Any DECIMAL operand -> DECIMAL division. spark_decimal_div already applies
-	// Spark's precision rules AND returns NULL on a zero divisor, which is exactly
-	// try_divide's decimal semantics.
-	if (type_a.id() == LogicalTypeId::DECIMAL || type_b.id() == LogicalTypeId::DECIMAL) {
+	// DECIMAL division only when both sides are DECIMAL or an integral type that can be promoted to DECIMAL.
+	auto is_decimal_or_integral = [](LogicalTypeId id) {
+		switch (id) {
+		case LogicalTypeId::DECIMAL:
+		case LogicalTypeId::TINYINT:
+		case LogicalTypeId::SMALLINT:
+		case LogicalTypeId::INTEGER:
+		case LogicalTypeId::BIGINT:
+		case LogicalTypeId::HUGEINT:
+			return true;
+		default:
+			return false;
+		}
+	};
+	if ((type_a.id() == LogicalTypeId::DECIMAL || type_b.id() == LogicalTypeId::DECIMAL) &&
+	    is_decimal_or_integral(type_a.id()) && is_decimal_or_integral(type_b.id())) {
 		return BindSparkDecimalDiv(context, bound_function, arguments);
 	}
 
