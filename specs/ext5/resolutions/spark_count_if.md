@@ -8,6 +8,6 @@ inputs; **no extension function written.**
 - **Oracle:** Apache Spark 4.1.1 via `test/spark_oracle/verify_first.spark.sql`
   vs DuckDB `test/spark_oracle/verify_first.duckdb.sql`.
 - **Parity evidence:** count_if=3 with a NULL row (NULL treated as FALSE) — Spark==DuckDB. Empty group -> 0 both.
-- **Regression guard:** `test/sql/native_spark_count_if_parity.test` (asserts the native
+- **Regression guard:** `test/sql/native_count_if_parity.test` (asserts the native
   function equals the captured Spark 4.1.1 golden; runs in `make test` on the
   pinned DuckDB v1.5.0).
